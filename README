@@ -1,1 +1,15 @@
- prgram to receive top-side signals via UART
+This is the second of a two-part project to control an underwater ROV.
+This particular program receives 8-bit data packets from the controlling MCU and uses the data
+to generate PWM signals of specific pulse widths.  These PWM signals are then sent to the corresponding 
+ESCs of six thruster motors.
+
+MCU is a PIC16F1937
+
+Thrusters are Blue Robotics T100s
+
+ESCs are Afro 30amp models
+
+***********NOTE********************************************
+This program is undergoing a rewrite to the method of transmitting the packets but serves as
+as test for anyone interested in such a thing.  Currently, direction/speed is controlled via 
+5 data packets.  This will be reduced to 4 data packets in the next version of the project.
