@@ -13,10 +13,6 @@
     #define BANK3  (h'180')
     #define baudRate (d'250') ;baudrate = 10 (10 bps)
 			     ;set BRG16 bit of BAUDCON register
-    #define XTAL (d'4')	     ;4MHz crystal
-    ; Low Speed:
-    ;  baud rate = (XTAL * 10^6) / (64 * (X + 1)) - 1
-    #define X ((XTAL * d'1000000') / (d'64' * baudRate)) - 1
 
     __CONFIG _CONFIG1,    _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_HS & _FCMEN_OFF & _IESO_OFF
 
@@ -28,8 +24,8 @@ status_copy	RES     1	;variable used for context saving (status reg)
 pclath_copy	RES     1	;variable used for context saving (pclath copy)
 transData	RES	1	;Data to be transmitted via UART
 receiveData	RES	1	;Data received via UART
-positionSpeed	RES	1	;as well as thruster speed (Default max-reverse)
-				;0.9mS (CCPR1L = 59)
+positionSpeed	RES	1	;thruster speed (Default max-reverse)
+				;1.1mS (CCPR1L = 70)
 adcCounter	RES	1	;counter to be increented till value in
 				;ADRESH is reached
 ADRESHc		RES	1	;copy of ADRESH

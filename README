@@ -13,3 +13,6 @@ ESCs are Afro 30amp models
 This program is undergoing a rewrite to the method of transmitting the packets but serves as
 as test for anyone interested in such a thing.  Currently, direction/speed is controlled via 
 5 data packets.  This will be reduced to 4 data packets in the next version of the project.
+
+The PWM values also need to be adjusted due the change in clock-speed of the MCUs external crystal
+
