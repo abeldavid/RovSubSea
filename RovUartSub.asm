@@ -24,19 +24,7 @@ status_copy	RES     1	;variable used for context saving (status reg)
 pclath_copy	RES     1	;variable used for context saving (pclath copy)
 transData	RES	1	;Data to be transmitted via UART
 receiveData	RES	1	;Data received via UART
-positionSpeed	RES	1	;thruster speed (Default max-reverse)
-				;1.1mS (CCPR1L = 70)
-adcCounter	RES	1	;counter to be increented till value in
-				;ADRESH is reached
-ADRESHc		RES	1	;copy of ADRESH
-compCounter	RES	1	;counter to be incremented once every 6 servo
-				;steps to give full range of motion
 motorTemp	RES	1
-ADRESH0		RES	1	;copy of value from pin AN0
-ADRESH1		RES	1	;copy of value from pin AN1
-ADRESH2		RES	1	;copy of value from pin AN2
-AN0disp		RES	1	;displacement of ADRESHO from 127
-AN1disp		RES	1	;displacement of ADRESH1 from 127
 
 ;General Variables
 GENVAR	UDATA
