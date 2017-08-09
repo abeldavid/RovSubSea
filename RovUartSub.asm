@@ -13,6 +13,10 @@
     #define BANK3  (h'180')
     #define baudRate (d'250') ;baudrate = 10 (10 bps)
 			     ;set BRG16 bit of BAUDCON register
+    #define XTAL (d'4')	     ;4MHz crystal
+    ; Low Speed:
+    ;  baud rate = (XTAL * 10^6) / (64 * (X + 1)) - 1
+    #define X ((XTAL * d'1000000') / (d'64' * baudRate)) - 1
 
     __CONFIG _CONFIG1,    _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_HS & _FCMEN_OFF & _IESO_OFF
 
@@ -24,135 +28,103 @@ status_copy	RES     1	;variable used for context saving (status reg)
 pclath_copy	RES     1	;variable used for context saving (pclath copy)
 transData	RES	1	;Data to be transmitted via UART
 receiveData	RES	1	;Data received via UART
-motorTemp	RES	1
-
+state		RES	1	;Direction "state" of ROV
+forwardSpeed	RES	1	;value to be placed in CCPR1L
+reverseSpeed	RES	1	;value to be placed in CCPR2L
+upDownSpeed	RES	1	;value to be placed in CCPR3L
 ;General Variables
 GENVAR	UDATA
-dly16Ctr	RES	1
-initCounter	RES	1	;used for calls to delayMillis to initialize ESC
-thruster1	RES	1	;PWM value for thruster #1
-thruster2	RES	1	;PWM value for thruster #2
-thruster3	RES	1	;PWM value for thruster #3
-thruster4	RES	1	;PWM value for thruster #4
-thrusterUpDown	RES	1	;PWM value for up/down thrusters
+initCounter	RES	1	;counter for initializing ESCs
 UartReceiveCtr	RES	1	;counter for number of UART receptions
 
 ;**********************************************************************
     ORG		0x000	
-    pagesel		start	; processor reset vector
-    goto		start	; go to beginning of program
+    pagesel		start	    ;processor reset vector
+    goto		start	    ;go to beginning of program
 INT_VECTOR:
-    ORG		0x004		; interrupt vector location
+    ORG		0x004		    ;interrupt vector location
 INTERRUPT:
-	movwf   w_copy                      ; save off current W register contents
-        movf    STATUS,w                    ; move status register into W register
-        movwf   status_copy                 ; save off contents of STATUS register
-        movf    PCLATH,W
-        movwf   pclath_copy
+    movwf          w_copy           ;save off current W register contents
+    movf	   STATUS,w         ;move status register into W register
+    movwf	   status_copy      ;save off contents of STATUS register
+    movf	   PCLATH,W
+    movwf	   pclath_copy
 	
-	;Determine source of interrupt
-	banksel	    PIR1
-	btfsc	    PIR1, RCIF	    ;receive interrupt?
-	goto	    UartReceive
+    ;Determine source of interrupt
+    banksel	    PIR1
+    btfsc	    PIR1, RCIF	    ;receive interrupt?
+    goto	    UartReceive
 	
 UartReceive
-	banksel	    PIR1
-	bcf	    PIR1, RCIF
-	call	    Receive
-;test current value of counter and place data in correct thruster register
-	;Test for thruster #1
-	movlw	    .0
-	banksel	    UartReceiveCtr
-	xorwf	    UartReceiveCtr, w
-	btfsc	    STATUS, Z
-	goto	    thruster1Data
+    banksel	    PIR1
+    bcf	            PIR1, RCIF
+    call	    Receive
+    ;Get "state" of ROV direction signal
+    movlw	    .0
+    banksel	    UartReceiveCtr
+    xorwf	    UartReceiveCtr, w
+    btfsc	    STATUS, Z
+    goto	    stateData
 	
-	;Test for thruster #2
-	movlw	    b'00000001'
-	banksel	    UartReceiveCtr
-	xorwf	    UartReceiveCtr, w
-	btfsc	    STATUS, Z
-	goto	    thruster2Data
+    ;Get forward speed
+    movlw	    b'00000001'
+    banksel	    UartReceiveCtr
+    xorwf	    UartReceiveCtr, w
+    btfsc	    STATUS, Z
+    goto	    forwardData
 	
-	;Test for thruster #3
-	movlw	    b'00000010'
-	banksel	    UartReceiveCtr
-	xorwf	    UartReceiveCtr, w
-	btfsc	    STATUS, Z
-	goto	    thruster3Data
+    ;Get reverse speed
+    movlw	    b'00000010'
+    banksel	    UartReceiveCtr
+    xorwf	    UartReceiveCtr, w
+    btfsc	    STATUS, Z
+    goto	    reverseData
 	
-	;Test for thruster #4
-	movlw	    b'00000011'
-	banksel	    UartReceiveCtr
-	xorwf	    UartReceiveCtr, w
-	btfsc	    STATUS, Z
-	goto	    thruster4Data
+    ;Get up/down speed
+    movlw	    b'00000011'
+    banksel	    UartReceiveCtr
+    xorwf	    UartReceiveCtr, w
+    btfsc	    STATUS, Z
+    goto	    upDownData
 	
-	;Test for Up/Down thrusters
-	movlw	    b'00000100'
-	banksel	    UartReceiveCtr
-	xorwf	    UartReceiveCtr, w
-	btfsc	    STATUS, Z
-	goto	    upDownData
+stateData
+    movfw	    receiveData
+    movwf	    state
+    banksel	    UartReceiveCtr
+    incf	    UartReceiveCtr, f
+    goto	    isrEnd
 	
-thruster1Data
-	movfw	    receiveData
-	banksel	    thruster1
-	movwf	    thruster1
-	banksel	    PORTB
-	movwf	    PORTB
-	banksel	    CCPR1L		;ESC #1
-	movwf	    CCPR1L
-	banksel	    UartReceiveCtr
-	incf	    UartReceiveCtr, f
-	goto	    isrEnd
+forwardData
+    movfw	    receiveData
+    movwf	    forwardSpeed
+    banksel	    UartReceiveCtr
+    incf	    UartReceiveCtr, f
+    goto	    isrEnd
 	
-thruster2Data
-	movfw	    receiveData
-	banksel	    thruster2
-	movwf	    thruster2
-	
-	banksel	    UartReceiveCtr
-	incf	    UartReceiveCtr, f
-	goto	    isrEnd
-	
-thruster3Data
-	movfw	    receiveData
-	banksel	    thruster3
-	movwf	    thruster3
-	
-	banksel	    UartReceiveCtr
-	incf	    UartReceiveCtr, f
-	goto	    isrEnd
-	
-thruster4Data
-	movfw	    receiveData
-	banksel	    thruster4
-	movwf	    thruster4
-	
-	banksel	    UartReceiveCtr
-	incf	    UartReceiveCtr, f
-	goto	    isrEnd
+reverseData
+    movfw	    receiveData
+    movwf	    reverseSpeed
+    banksel	    UartReceiveCtr
+    incf	    UartReceiveCtr, f
+    goto	    isrEnd
 	
 upDownData
-	movfw	    receiveData
-	banksel	    thrusterUpDown
-	movwf	    thrusterUpDown
+    movfw	    receiveData
+    movwf	    upDownSpeed
+    banksel	    UartReceiveCtr
+    clrf	    UartReceiveCtr	;Clear out UART receiver counter
 	
-	banksel	    UartReceiveCtr
-	clrf	    UartReceiveCtr	;Clear out UART receiver counter
-	
-	;restore pre-ISR values to registers
+;restore pre-ISR values to registers
 isrEnd
-	banksel	    PIR1
-	bsf	    PIR1, RCIF
-	movf    pclath_copy,W
-        movwf   PCLATH
-        movf    status_copy,w           ; retrieve copy of STATUS register
-        movwf   STATUS                  ; restore pre-isr STATUS register contents
-        swapf   w_copy,f
-        swapf   w_copy,w                ; restore pre-isr W register contents
-        retfie                          ; return from interrupt
+    banksel	    PIR1
+    bsf		    PIR1, RCIF
+    movf	    pclath_copy,W
+    movwf	    PCLATH
+    movf	    status_copy,w       ;retrieve copy of STATUS register
+    movwf	    STATUS              ;restore pre-isr STATUS register contents
+    swapf	    w_copy,f
+    swapf	    w_copy,w            ;restore pre-isr W register contents
+    retfie                              ;return from interrupt
 	
 delayMillis
     movwf	userMillis	;user defined number of milliseconds
@@ -280,7 +252,7 @@ start:
 ;***************Configure PWM***********************************************
     movlw	b'00000111'     ; configure Timer2:
 		; -----1--          turn Timer2 on (TMR2ON = 1)
-		; ------11          prescale = 64 (T2CKPS = 11)
+		; ------10          prescale = 16 (T2CKPS = 10)
     banksel	T2CON           ; -> TMR2 increments every 16 us
     movwf	T2CON
     movlw	.250            ; PR2 = 250
@@ -346,24 +318,126 @@ start:
     banksel	UartReceiveCtr
     clrf	UartReceiveCtr
 ;*******************************************************************************
-    movlw	.250
-    movwf	motorTemp
-    
+
     banksel	ANSELB
+    clrf	ANSELA
     clrf	ANSELB
     clrf	ANSELD
     clrf	ANSELE
     
     ;initialize ESC:
     call	ESCinit
+    ;initial "state" is stopped
+    movlw	.8
+    movwf	state
 
 mainLoop
-    ;9th data bit = LSB of transmission:
-    ;banksel	TXSTA
-    ;bcf	TXSTA, TX9D
-   
+;check state of direction signal
+    ;check for forward state
+    movlw	.1
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	forward
+    ;check for reverse state
+    movlw	.2
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	reverse
+    ;check for traverse right state
+    movlw	.3
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	traverseRight
+    ;check for traverse left state
+    movlw	.4
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	traverseLeft
+    ;check for clockwise rotation state
+    movlw	.5
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	clockwise
+    ;check for counter-clockwise rotation state
+    movlw	.6
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	counterClockwise
+    ;check for up/down state
+    movlw	.7
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	upDown
+    ;check for stopped state
+    movlw	.8
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	stop
     
-    
+forward
+    movlw	b'11000011'
+		 ;----0011	;AND thrusters 1/2 on FWD logic IC (CCPR1L/P1A)
+		 ;1100----	;AND thrusters 3/4 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+reverse
+    movlw	b'00111100'
+		 ;----1100	;AND thrusters 3/4 on FWD logic IC (CCPR1L/P1A)
+		 ;0011----	;AND thrusters 1/2 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+traverseRight
+    movlw	b'10100101'	
+		 ;----0101	;AND thrusters 1/3 on FWD logic IC (CCPR1L/P1A)
+		 ;1010----	;AND thrusters 2/4 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+traverseLeft
+    movlw	b'01011010'
+		 ;----1010	;AND thrusters 2/4 on FWD logic IC (CCPR1L/P1A)
+		 ;0101----	;AND thrusters 1/3 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+counterClockwise
+    movlw	b'10010110'
+		 ;----0110	;AND thrusters 2/3 on FWD logic IC (CCPR1L/P1A)
+		 ;1001----	;AND thrusters 1/4 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+clockwise
+    movlw	b'01101001'	
+		 ;----1001	;AND thrusters 1/4 on FWD logic IC (CCPR1L/P1A)
+		 ;0110----	;AND thrusters 2/3 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+upDown
+    banksel	PORTD
+    clrf	PORTD		;stop all horizontal movement
+    movfw	upDownSpeed
+    banksel	CCPR3L
+    movwf	CCPR3L
+    goto	mainLoop
+stop
+    movlw	b'00001111'
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+values
+    movfw	forwardSpeed
+    banksel	CCPR1L
+    movwf	CCPR1L
+    movfw	reverseSpeed
+    banksel	CCPR2L
+    movwf	CCPR2L
+    movlw	.95		;stop up/down thrusters
+    banksel	CCPR3L
+    movwf	CCPR3L
     goto	mainLoop
    
     END                       
