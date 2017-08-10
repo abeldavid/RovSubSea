@@ -11,12 +11,6 @@
     #define BANK1  (h'080')
     #define BANK2  (h'100')
     #define BANK3  (h'180')
-    #define baudRate (d'250') ;baudrate = 10 (10 bps)
-			     ;set BRG16 bit of BAUDCON register
-    #define XTAL (d'4')	     ;4MHz crystal
-    ; Low Speed:
-    ;  baud rate = (XTAL * 10^6) / (64 * (X + 1)) - 1
-    #define X ((XTAL * d'1000000') / (d'64' * baudRate)) - 1
 
     __CONFIG _CONFIG1,    _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_HS & _FCMEN_OFF & _IESO_OFF
 
@@ -56,8 +50,10 @@ INTERRUPT:
     goto	    UartReceive
 	
 UartReceive
+    banksel	    PIE1
+    bcf		    PIE1, RCIE	    ;disable UART receive interrupts
     banksel	    PIR1
-    bcf	            PIR1, RCIF
+    bcf	            PIR1, RCIF	    ;clear UART receive interrupt flag
     call	    Receive
     ;Get "state" of ROV direction signal
     movlw	    .0
@@ -113,11 +109,12 @@ upDownData
     movwf	    upDownSpeed
     banksel	    UartReceiveCtr
     clrf	    UartReceiveCtr	;Clear out UART receiver counter
+    call	    processThrusterStream
 	
 ;restore pre-ISR values to registers
 isrEnd
-    banksel	    PIR1
-    bsf		    PIR1, RCIF
+    banksel	    PIE1
+    bsf		    PIE1, RCIE	    ;enable UART receive interrupts
     movf	    pclath_copy,W
     movwf	    PCLATH
     movf	    status_copy,w       ;retrieve copy of STATUS register
@@ -125,6 +122,112 @@ isrEnd
     swapf	    w_copy,f
     swapf	    w_copy,w            ;restore pre-isr W register contents
     retfie                              ;return from interrupt
+    
+processThrusterStream
+    ;check state of direction signal
+    ;check for forward state
+    movlw	.1
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	forward
+    ;check for reverse state
+    movlw	.2
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	reverse
+    ;check for traverse right state
+    movlw	.3
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	traverseRight
+    ;check for traverse left state
+    movlw	.4
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	traverseLeft
+    ;check for clockwise rotation state
+    movlw	.5
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	clockwise
+    ;check for counter-clockwise rotation state
+    movlw	.6
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	counterClockwise
+    ;check for up/down state
+    movlw	.7
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	upDown
+    ;check for stopped state
+    movlw	.8
+    xorwf	state, w
+    btfsc	STATUS, Z
+    goto	stop
+    
+forward
+    movlw	b'11000011'
+		 ;----0011	;AND thrusters 1/2 on FWD logic IC (CCPR1L/P1A)
+		 ;1100----	;AND thrusters 3/4 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+reverse
+    movlw	b'00111100'
+		 ;----1100	;AND thrusters 3/4 on FWD logic IC (CCPR1L/P1A)
+		 ;0011----	;AND thrusters 1/2 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+traverseRight
+    movlw	b'10100101'	
+		 ;----0101	;AND thrusters 1/3 on FWD logic IC (CCPR1L/P1A)
+		 ;1010----	;AND thrusters 2/4 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+traverseLeft
+    movlw	b'01011010'
+		 ;----1010	;AND thrusters 2/4 on FWD logic IC (CCPR1L/P1A)
+		 ;0101----	;AND thrusters 1/3 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+counterClockwise
+    movlw	b'10010110'
+		 ;----0110	;AND thrusters 2/3 on FWD logic IC (CCPR1L/P1A)
+		 ;1001----	;AND thrusters 1/4 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+clockwise
+    movlw	b'01101001'	
+		 ;----1001	;AND thrusters 1/4 on FWD logic IC (CCPR1L/P1A)
+		 ;0110----	;AND thrusters 2/3 on REV logic IC (CCPR2L/P2A)
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+upDown
+    banksel	PORTD
+    clrf	PORTD		;stop all horizontal movement
+    goto	values
+stop
+    movlw	b'00001111'
+    banksel	PORTD
+    movwf	PORTD
+    goto	values
+values
+    movfw	forwardSpeed
+    banksel	CCPR1L
+    movwf	CCPR1L
+    movfw	reverseSpeed
+    banksel	CCPR2L
+    movwf	CCPR2L
+    movfw	upDownSpeed		;stop up/down thrusters
+    banksel	CCPR3L
+    movwf	CCPR3L
+    retlw	0
 	
 delayMillis
     movwf	userMillis	;user defined number of milliseconds
@@ -239,7 +342,7 @@ start:
 		 ;----1---	;Enable interrupt on change for PORTB (IOCIE=0)
     movwf	INTCON
     
-    movlw	b'00110000'
+    movlw	b'00100000'
 		 ;--1-----	;Enable USART receive interrupt (RCIE=1)
     banksel	PIE1
     movwf	PIE1
@@ -281,7 +384,7 @@ start:
     ;Configure Baud rate
     movlw	b'01000000' 
     banksel	SPBRG
-    movwf	SPBRG	    ;Move 'X' to baurate generator
+    movwf	SPBRG	    
     
     movlw	b'00000011'
     banksel	SPBRGH
@@ -332,115 +435,11 @@ start:
     movwf	state
 
 mainLoop
-;check state of direction signal
-    ;check for forward state
-    movlw	.1
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	forward
-    ;check for reverse state
-    movlw	.2
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	reverse
-    ;check for traverse right state
-    movlw	.3
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	traverseRight
-    ;check for traverse left state
-    movlw	.4
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	traverseLeft
-    ;check for clockwise rotation state
-    movlw	.5
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	clockwise
-    ;check for counter-clockwise rotation state
-    movlw	.6
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	counterClockwise
-    ;check for up/down state
-    movlw	.7
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	upDown
-    ;check for stopped state
-    movlw	.8
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	stop
-    
-forward
-    movlw	b'11000011'
-		 ;----0011	;AND thrusters 1/2 on FWD logic IC (CCPR1L/P1A)
-		 ;1100----	;AND thrusters 3/4 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-reverse
-    movlw	b'00111100'
-		 ;----1100	;AND thrusters 3/4 on FWD logic IC (CCPR1L/P1A)
-		 ;0011----	;AND thrusters 1/2 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-traverseRight
-    movlw	b'10100101'	
-		 ;----0101	;AND thrusters 1/3 on FWD logic IC (CCPR1L/P1A)
-		 ;1010----	;AND thrusters 2/4 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-traverseLeft
-    movlw	b'01011010'
-		 ;----1010	;AND thrusters 2/4 on FWD logic IC (CCPR1L/P1A)
-		 ;0101----	;AND thrusters 1/3 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-counterClockwise
-    movlw	b'10010110'
-		 ;----0110	;AND thrusters 2/3 on FWD logic IC (CCPR1L/P1A)
-		 ;1001----	;AND thrusters 1/4 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-clockwise
-    movlw	b'01101001'	
-		 ;----1001	;AND thrusters 1/4 on FWD logic IC (CCPR1L/P1A)
-		 ;0110----	;AND thrusters 2/3 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-upDown
-    banksel	PORTD
-    clrf	PORTD		;stop all horizontal movement
-    movfw	upDownSpeed
-    banksel	CCPR3L
-    movwf	CCPR3L
-    goto	mainLoop
-stop
-    movlw	b'00001111'
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-values
-    movfw	forwardSpeed
-    banksel	CCPR1L
-    movwf	CCPR1L
-    movfw	reverseSpeed
-    banksel	CCPR2L
-    movwf	CCPR2L
-    movlw	.95		;stop up/down thrusters
-    banksel	CCPR3L
-    movwf	CCPR3L
+
     goto	mainLoop
    
     END                       
+
 
 
 
