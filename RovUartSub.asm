@@ -352,9 +352,6 @@ start:
     banksel	OSCCON
     movwf	OSCCON
     
-    ;initialize ESC:
-    call	ESCinit
-    
 ;***************Configure PWM***********************************************
     movlw	b'00000111'     ; configure Timer2:
 		; -----1--          turn Timer2 on (TMR2ON = 1)
@@ -382,6 +379,9 @@ start:
     movwf	CCP2CON
     banksel	CCP3CON
     movwf	CCP3CON
+    
+    ;initialize ESC:
+    call	ESCinit
     
 ;******************************CONFIGURE UART:**********************************
     ;Configure Baud rate
