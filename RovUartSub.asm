@@ -352,6 +352,9 @@ start:
     banksel	OSCCON
     movwf	OSCCON
     
+    ;initialize ESC:
+    call	ESCinit
+    
 ;***************Configure PWM***********************************************
     movlw	b'00000111'     ; configure Timer2:
 		; -----1--          turn Timer2 on (TMR2ON = 1)
@@ -428,8 +431,6 @@ start:
     clrf	ANSELD
     clrf	ANSELE
     
-    ;initialize ESC:
-    call	ESCinit
     ;initial "state" is stopped
     movlw	.8
     movwf	state
