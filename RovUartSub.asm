@@ -210,7 +210,7 @@ clockwise
     goto	values
 upDown
     banksel	PORTD
-    clrf	PORTD		;stop all horizontal movement
+    movlw	b'00001111'	;stop all horizontal movement
     goto	values
 stop
     movlw	b'00001111'
@@ -332,15 +332,6 @@ start:
 				;or once every 8uS
     banksel	OPTION_REG	
     movwf	OPTION_REG
-	
-    ;enable interrupts
-    movlw	b'11001000'
-	         ;1-------	;Enable global interrupts (GIE=1)
-		 ;-1------	;Enable peripheral interrupts (PEIE=1)
-		 ;--0-----	;Disable TMR0 interrupts (TMROIE=0)
-		 ;---0----	;Disable RBO/INT external interrupt (INTE=1)
-		 ;----1---	;Enable interrupt on change for PORTB (IOCIE=0)
-    movwf	INTCON
     
     movlw	b'00100000'
 		 ;--1-----	;Enable USART receive interrupt (RCIE=1)
@@ -382,6 +373,15 @@ start:
     
     ;initialize ESC:
     call	ESCinit
+    
+    ;enable interrupts
+    movlw	b'11001000'
+	         ;1-------	;Enable global interrupts (GIE=1)
+		 ;-1------	;Enable peripheral interrupts (PEIE=1)
+		 ;--0-----	;Disable TMR0 interrupts (TMROIE=0)
+		 ;---0----	;Disable RBO/INT external interrupt (INTE=1)
+		 ;----1---	;Enable interrupt on change for PORTB (IOCIE=0)
+    movwf	INTCON
     
 ;******************************CONFIGURE UART:**********************************
     ;Configure Baud rate
