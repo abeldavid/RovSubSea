@@ -29,7 +29,6 @@ upDownSpeed	RES	1	;value to be placed in CCPR3L
 ;General Variables
 GENVAR	UDATA
 initCounter	RES	1	;counter for initializing ESCs
-UartReceiveCtr	RES	1	;counter for number of UART receptions
 
 ;**********************************************************************
     ORG		0x000	
@@ -38,90 +37,76 @@ UartReceiveCtr	RES	1	;counter for number of UART receptions
 INT_VECTOR:
     ORG		0x004		    ;interrupt vector location
 INTERRUPT:
-    movwf          w_copy           ;save off current W register contents
-    movf	   STATUS,w         ;move status register into W register
-    movwf	   status_copy      ;save off contents of STATUS register
-    movf	   PCLATH,W
-    movwf	   pclath_copy
+    movwf       w_copy           ;save off current W register contents
+    movf	STATUS,w         ;move status register into W register
+    movwf	status_copy      ;save off contents of STATUS register
+    movf	PCLATH,W
+    movwf       pclath_copy
 	
     ;Determine source of interrupt
-    banksel	    PIR1
-    btfsc	    PIR1, RCIF	    ;receive interrupt?
-    goto	    UartReceive
+    banksel	PIR1
+    btfsc	PIR1, RCIF	    ;receive interrupt?
+    goto	UartReceive
 	
 UartReceive
-    banksel	    PIE1
-    bcf		    PIE1, RCIE	    ;disable UART receive interrupts
-    banksel	    PIR1
-    bcf	            PIR1, RCIF	    ;clear UART receive interrupt flag
-    call	    Receive
+    banksel	PIE1
+    bcf		PIE1, RCIE	    ;disable UART receive interrupts
+    call	Receive
+    
     ;Get "state" of ROV direction signal
-    movlw	    .0
-    banksel	    UartReceiveCtr
-    xorwf	    UartReceiveCtr, w
-    btfsc	    STATUS, Z
-    goto	    stateData
+    ;Make sure UART packet contains a valid value for "state"
+    movlw	.9		;max number for state = 8
+    subwf	receiveData, w  ;subtract 9 from value in UART packet
+    btfss       STATUS, C	;(C=0 is neg #) (valid result = neg #)
+    goto	stateData       ;packet contains a valid value for "state"
 	
     ;Get forward speed
-    movlw	    b'00000001'
-    banksel	    UartReceiveCtr
-    xorwf	    UartReceiveCtr, w
-    btfsc	    STATUS, Z
-    goto	    forwardData
+    movlw	.95	        ;min number for forwardData=95 (for this purpose)
+    subwf	receiveData, w  ;subtract 95 from value in UART packet
+    btfsc	STATUS, C	;(C=0 is neg #) (valid result = pos #)
+    goto	forwardData
 	
     ;Get reverse speed
-    movlw	    b'00000010'
-    banksel	    UartReceiveCtr
-    xorwf	    UartReceiveCtr, w
-    btfsc	    STATUS, Z
-    goto	    reverseData
+    movlw	.95		;min number for reverseData=95 (for this purpose)
+    subwf	receiveData, w  ;subtract 95 from value in UART packet
+    btfss	STATUS, C	;(C=0 is neg #) (valid result = neg #)
+    goto	reverseData
 	
     ;Get up/down speed
-    movlw	    b'00000011'
-    banksel	    UartReceiveCtr
-    xorwf	    UartReceiveCtr, w
-    btfsc	    STATUS, Z
-    goto	    upDownData
+    
+    goto	upDownData
 	
 stateData
-    movfw	    receiveData
-    movwf	    state
-    banksel	    UartReceiveCtr
-    incf	    UartReceiveCtr, f
-    goto	    isrEnd
+    movfw	receiveData
+    movwf	state
+    goto	isrEnd
 	
 forwardData
-    movfw	    receiveData
-    movwf	    forwardSpeed
-    banksel	    UartReceiveCtr
-    incf	    UartReceiveCtr, f
-    goto	    isrEnd
+    movfw	receiveData
+    movwf	forwardSpeed
+    goto	isrEnd
 	
 reverseData
-    movfw	    receiveData
-    movwf	    reverseSpeed
-    banksel	    UartReceiveCtr
-    incf	    UartReceiveCtr, f
-    goto	    isrEnd
+    movfw	receiveData
+    movwf	reverseSpeed
+    goto	isrEnd
 	
 upDownData
-    movfw	    receiveData
-    movwf	    upDownSpeed
-    banksel	    UartReceiveCtr
-    clrf	    UartReceiveCtr	;Clear out UART receiver counter
-    call	    processThrusterStream
+    movfw	receiveData
+    movwf	upDownSpeed
+    ;call	processThrusterStream
 	
 ;restore pre-ISR values to registers
 isrEnd
-    banksel	    PIE1
-    bsf		    PIE1, RCIE	    ;enable UART receive interrupts
-    movf	    pclath_copy,W
-    movwf	    PCLATH
-    movf	    status_copy,w       ;retrieve copy of STATUS register
-    movwf	    STATUS              ;restore pre-isr STATUS register contents
-    swapf	    w_copy,f
-    swapf	    w_copy,w            ;restore pre-isr W register contents
-    retfie                              ;return from interrupt
+    banksel	PIE1
+    bsf		PIE1, RCIE	;enable UART receive interrupts
+    movf	pclath_copy,W
+    movwf	PCLATH
+    movf	status_copy,w   ;retrieve copy of STATUS register
+    movwf	STATUS          ;restore pre-isr STATUS register contents
+    swapf	w_copy,f
+    swapf	w_copy,w        ;restore pre-isr W register contents
+    retfie                      ;return from interrupt
     
 processThrusterStream
     ;check state of direction signal
@@ -294,6 +279,8 @@ wait_receive
     banksel	RCREG
     movfw	RCREG		;Place data from RCREG into "receiveData"
     movwf	receiveData
+    banksel	    PIR1
+    bcf	            PIR1, RCIF	    ;clear UART receive interrupt flag
     banksel	RCSTA
     bsf		RCSTA, CREN
     retlw	0
@@ -374,15 +361,6 @@ start:
     ;initialize ESC:
     call	ESCinit
     
-    ;enable interrupts
-    movlw	b'11001000'
-	         ;1-------	;Enable global interrupts (GIE=1)
-		 ;-1------	;Enable peripheral interrupts (PEIE=1)
-		 ;--0-----	;Disable TMR0 interrupts (TMROIE=0)
-		 ;---0----	;Disable RBO/INT external interrupt (INTE=1)
-		 ;----1---	;Enable interrupt on change for PORTB (IOCIE=0)
-    movwf	INTCON
-    
 ;******************************CONFIGURE UART:**********************************
     ;Configure Baud rate
     movlw	b'01000000' 
@@ -421,8 +399,16 @@ start:
     call	delayMillis
     banksel	PORTB
     clrf	PORTB
-    banksel	UartReceiveCtr
-    clrf	UartReceiveCtr
+    
+    ;enable interrupts
+    movlw	b'11001000'
+	         ;1-------	;Enable global interrupts (GIE=1)
+		 ;-1------	;Enable peripheral interrupts (PEIE=1)
+		 ;--0-----	;Disable TMR0 interrupts (TMROIE=0)
+		 ;---0----	;Disable RBO/INT external interrupt (INTE=1)
+		 ;----1---	;Enable interrupt on change for PORTB (IOCIE=0)
+    movwf	INTCON
+    
 ;*******************************************************************************
 
     banksel	ANSELB
@@ -432,11 +418,11 @@ start:
     clrf	ANSELE
     
     ;initial "state" is stopped
-    movlw	.8
-    movwf	state
+    ;movlw	.8
+    ;movwf	state
 
 mainLoop
-
+    call	processThrusterStream
     goto	mainLoop
    
     END                       
