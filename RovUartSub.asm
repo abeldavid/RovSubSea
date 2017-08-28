@@ -26,9 +26,12 @@ state		RES	1	;Direction "state" of ROV
 forwardSpeed	RES	1	;value to be placed in CCPR1L
 reverseSpeed	RES	1	;value to be placed in CCPR2L
 upDownSpeed	RES	1	;value to be placed in CCPR3L
+readyThrust	RES	1	;flag to be set when all 4 UART thruster data packets 
+				;have been received
 ;General Variables
 GENVAR	UDATA
 initCounter	RES	1	;counter for initializing ESCs
+UartReceiveCtr	RES	1	;counter for number of UART receptions
 
 ;**********************************************************************
     ORG		0x000	
@@ -45,57 +48,57 @@ INTERRUPT:
 	
     ;Determine source of interrupt
     banksel	PIR1
-    btfsc	PIR1, RCIF	    ;receive interrupt?
+    btfsc	PIR1, RCIF	    ;UART receive interrupt?
     goto	UartReceive
-	
+;*********************BEGIN UART INTERRUPT**************************************
 UartReceive
     banksel	PIE1
     bcf		PIE1, RCIE	    ;disable UART receive interrupts
     call	Receive
-    
-    ;Get "state" of ROV direction signal
-    ;Make sure UART packet contains a valid value for "state"
-    movlw	.9		;max number for state = 8
-    subwf	receiveData, w  ;subtract 9 from value in UART packet
-    btfss       STATUS, C	;(C=0 is neg #) (valid result = neg #)
-    goto	stateData       ;packet contains a valid value for "state"
-	
-    ;Get forward speed
-    movlw	.95	        ;min number for forwardData=95 (for this purpose)
-    subwf	receiveData, w  ;subtract 95 from value in UART packet
-    btfsc	STATUS, C	;(C=0 is neg #) (valid result = pos #)
-    goto	forwardData
-	
-    ;Get reverse speed
-    movlw	.95		;min number for reverseData=95 (for this purpose)
-    subwf	receiveData, w  ;subtract 95 from value in UART packet
-    btfss	STATUS, C	;(C=0 is neg #) (valid result = neg #)
-    goto	reverseData
-	
-    ;Get up/down speed
-    
-    goto	upDownData
-	
+    ;1)Get "state" of ROV direction signal
+    ;Check if UART packet contains a valid value for "state" (1-7)
+    movlw	.8		;max number for "state"=7
+    subwf	receiveData, w	;subtract 8 from value in UART packet
+    btfss	STATUS, C	;(C=0 is neg number) (valid result=neg #)
+    goto	stateData
+    ;If UartReceiveCtr is "1" then get forward speed
+    movlw	.1
+    banksel	UartReceiveCtr
+    xorwf	UartReceiveCtr, w
+    btfss	STATUS, Z
+    goto	checkReverseSpeed   ;Not "1" so proceed
+    banksel	UartReceiveCtr
+    incf	UartReceiveCtr, f   ;increment UART reception counter
+    movfw	receiveData	    ;Place data packet value into forwardSpeed
+    movwf	forwardSpeed
+    goto	isrEnd
+    ;If UartReceiveCtr is "2" then get reverse speed
+checkReverseSpeed
+    movlw	.2
+    banksel	UartReceiveCtr
+    xorwf	UartReceiveCtr, w
+    btfss	STATUS, Z
+    goto	checkUpDownSpeed   ;Not "1" so proceed
+    banksel	UartReceiveCtr
+    incf	UartReceiveCtr, f   ;increment UART reception counter
+    movfw	receiveData	    ;Place data packet value into forwardSpeed
+    movwf	reverseSpeed
+    goto	isrEnd
+    ;finally, get Up/Down speed
+checkUpDownSpeed
+    movfw	receiveData	    ;Place data packet value into forwardSpeed
+    movwf	upDownSpeed
+    bsf		readyThrust, 1	    ;set readyThrustFlag
+    goto	isrEnd
+;Get the directional "state" of ROV
 stateData
+    movlw	.1
+    banksel	UartReceiveCtr
+    movwf	UartReceiveCtr	;restart UART reception counter
     movfw	receiveData
     movwf	state
     goto	isrEnd
-	
-forwardData
-    movfw	receiveData
-    movwf	forwardSpeed
-    goto	isrEnd
-	
-reverseData
-    movfw	receiveData
-    movwf	reverseSpeed
-    goto	isrEnd
-	
-upDownData
-    movfw	receiveData
-    movwf	upDownSpeed
-    ;call	processThrusterStream
-	
+;***************************END UART RECEIVE INTERRUPT**************************
 ;restore pre-ISR values to registers
 isrEnd
     banksel	PIE1
@@ -107,112 +110,54 @@ isrEnd
     swapf	w_copy,f
     swapf	w_copy,w        ;restore pre-isr W register contents
     retfie                      ;return from interrupt
-    
+
+;**************Send PWM signals to thrusters************************************
+;Once all four UART thruster data packets have been received, send PWM signals
+;to thrusters
 processThrusterStream
-    ;check state of direction signal
-    ;check for forward state
-    movlw	.1
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	forward
-    ;check for reverse state
-    movlw	.2
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	reverse
-    ;check for traverse right state
-    movlw	.3
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	traverseRight
-    ;check for traverse left state
-    movlw	.4
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	traverseLeft
-    ;check for clockwise rotation state
-    movlw	.5
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	clockwise
-    ;check for counter-clockwise rotation state
-    movlw	.6
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	counterClockwise
-    ;check for up/down state
-    movlw	.7
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	upDown
-    ;check for stopped state
-    movlw	.8
-    xorwf	state, w
-    btfsc	STATUS, Z
-    goto	stop
+    ;banksel	PIE1
+    ;bcf		PIE1, RCIE	    ;disable UART receive interrupts
     
-forward
-    movlw	b'11000011'
-		 ;----0011	;AND thrusters 1/2 on FWD logic IC (CCPR1L/P1A)
-		 ;1100----	;AND thrusters 3/4 on REV logic IC (CCPR2L/P2A)
+    ;check directional state of ROV
+    movfw	state
+    
+    ;use lookup table to get AND values for PORTD
+    call	stateLookUp
     banksel	PORTD
-    movwf	PORTD
-    goto	values
-reverse
-    movlw	b'00111100'
-		 ;----1100	;AND thrusters 3/4 on FWD logic IC (CCPR1L/P1A)
-		 ;0011----	;AND thrusters 1/2 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-traverseRight
-    movlw	b'10100101'	
-		 ;----0101	;AND thrusters 1/3 on FWD logic IC (CCPR1L/P1A)
-		 ;1010----	;AND thrusters 2/4 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-traverseLeft
-    movlw	b'01011010'
-		 ;----1010	;AND thrusters 2/4 on FWD logic IC (CCPR1L/P1A)
-		 ;0101----	;AND thrusters 1/3 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-counterClockwise
-    movlw	b'10010110'
-		 ;----0110	;AND thrusters 2/3 on FWD logic IC (CCPR1L/P1A)
-		 ;1001----	;AND thrusters 1/4 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-clockwise
-    movlw	b'01101001'	
-		 ;----1001	;AND thrusters 1/4 on FWD logic IC (CCPR1L/P1A)
-		 ;0110----	;AND thrusters 2/3 on REV logic IC (CCPR2L/P2A)
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-upDown
-    banksel	PORTD
-    movlw	b'00001111'	;stop all horizontal movement
-    goto	values
-stop
-    movlw	b'00001111'
-    banksel	PORTD
-    movwf	PORTD
-    goto	values
-values
+    movwf	PORTD	    ;place AND value in PORTD
+    
     movfw	forwardSpeed
     banksel	CCPR1L
     movwf	CCPR1L
+    
     movfw	reverseSpeed
     banksel	CCPR2L
     movwf	CCPR2L
-    movfw	upDownSpeed		;stop up/down thrusters
+    
+    movfw	upDownSpeed
     banksel	CCPR3L
     movwf	CCPR3L
+    
+    bcf		readyThrust, 1	;clear readyThrustFlag
+    ;banksel	PIE1
+    ;bsf	PIE1, RCIE	;enable UART receive interrupts
+
     retlw	0
+;*******************Done sending PWM to thrusters*******************************
+    
+;*******************Lookup Table to get ANDing values for PORTD ****************
+stateLookUp
+    addwf   PCL, f
+    retlw   b'11000011'	    ;forward (T1/T2 FWD, T3/T4 REV)
+    retlw   b'00111100'	    ;reverse (T3/T4 FWD, T1/T2 REV)
+    retlw   b'10100101'	    ;traverse right (T1/T3 FWD, T2/T4 REV)
+    retlw   b'01011010'	    ;traverse left (T2/T4 FWD, T1/T3 REV)
+    retlw   b'01101001'	    ;rotate clockwise (T1/T4 FWD, T2/T3 REV)
+    retlw   b'10010110'	    ;rotate counter-clockwise (T2/T3 FWD, T1/T4 REV)
+    retlw   b'00001111'	    ;up/down (T1/T4 FWD, T2/T3 REV)
+    retlw   b'00001111'	    ;stop
+    
+;*******************************************************************************
 	
 delayMillis
     movwf	userMillis	;user defined number of milliseconds
@@ -279,8 +224,8 @@ wait_receive
     banksel	RCREG
     movfw	RCREG		;Place data from RCREG into "receiveData"
     movwf	receiveData
-    banksel	    PIR1
-    bcf	            PIR1, RCIF	    ;clear UART receive interrupt flag
+    banksel	PIR1
+    bcf	        PIR1, RCIF	    ;clear UART receive interrupt flag
     banksel	RCSTA
     bsf		RCSTA, CREN
     retlw	0
@@ -333,7 +278,7 @@ start:
 ;***************Configure PWM***********************************************
     movlw	b'00000111'     ; configure Timer2:
 		; -----1--          turn Timer2 on (TMR2ON = 1)
-		; ------10          prescale = 16 (T2CKPS = 10)
+		; ------11          prescale = 64 (T2CKPS = 11)
     banksel	T2CON           ; -> TMR2 increments every 16 us
     movwf	T2CON
     movlw	.250            ; PR2 = 250
@@ -400,6 +345,10 @@ start:
     banksel	PORTB
     clrf	PORTB
     
+    banksel	UartReceiveCtr
+    clrf	UartReceiveCtr
+    clrf	readyThrust
+    
     ;enable interrupts
     movlw	b'11001000'
 	         ;1-------	;Enable global interrupts (GIE=1)
@@ -420,9 +369,11 @@ start:
     ;initial "state" is stopped
     ;movlw	.8
     ;movwf	state
-
+    
 mainLoop
+    btfsc	readyThrust, 1
     call	processThrusterStream
+    
     goto	mainLoop
    
     END                       
