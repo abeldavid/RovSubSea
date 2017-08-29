@@ -148,14 +148,14 @@ processThrusterStream
 ;*******************Lookup Table to get ANDing values for PORTD ****************
 stateLookUp
     addwf   PCL, f
-    retlw   b'11000011'	    ;forward (T1/T2 FWD, T3/T4 REV)
-    retlw   b'00111100'	    ;reverse (T3/T4 FWD, T1/T2 REV)
-    retlw   b'10100101'	    ;traverse right (T1/T3 FWD, T2/T4 REV)
-    retlw   b'01011010'	    ;traverse left (T2/T4 FWD, T1/T3 REV)
-    retlw   b'01101001'	    ;rotate clockwise (T1/T4 FWD, T2/T3 REV)
-    retlw   b'10010110'	    ;rotate counter-clockwise (T2/T3 FWD, T1/T4 REV)
-    retlw   b'00001111'	    ;up/down (T1/T4 FWD, T2/T3 REV)
-    retlw   b'00001111'	    ;stop
+    retlw   b'11000011'	    ;0 forward (T1/T2 FWD, T3/T4 REV)
+    retlw   b'00111100'	    ;1 reverse (T3/T4 FWD, T1/T2 REV)
+    retlw   b'10100101'	    ;2 traverse right (T1/T3 FWD, T2/T4 REV)
+    retlw   b'01011010'	    ;3 traverse left (T2/T4 FWD, T1/T3 REV)
+    retlw   b'01101001'	    ;4 rotate clockwise (T1/T4 FWD, T2/T3 REV)
+    retlw   b'10010110'	    ;5 rotate counter-clockwise (T2/T3 FWD, T1/T4 REV)
+    retlw   b'00001111'	    ;6 up/down (T1/T4 FWD, T2/T3 REV)
+    retlw   b'00001111'	    ;7 stop
     
 ;*******************************************************************************
 	
@@ -303,9 +303,6 @@ start:
     banksel	CCP3CON
     movwf	CCP3CON
     
-    ;initialize ESC:
-    call	ESCinit
-    
 ;******************************CONFIGURE UART:**********************************
     ;Configure Baud rate
     movlw	b'01000000' 
@@ -349,6 +346,9 @@ start:
     clrf	UartReceiveCtr
     clrf	readyThrust
     
+    ;initialize ESC:
+    call	ESCinit
+    
     ;enable interrupts
     movlw	b'11001000'
 	         ;1-------	;Enable global interrupts (GIE=1)
@@ -365,10 +365,6 @@ start:
     clrf	ANSELB
     clrf	ANSELD
     clrf	ANSELE
-    
-    ;initial "state" is stopped
-    ;movlw	.8
-    ;movwf	state
     
 mainLoop
     btfsc	readyThrust, 1
