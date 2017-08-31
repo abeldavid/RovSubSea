@@ -45,15 +45,41 @@ INTERRUPT:
     movwf	status_copy      ;save off contents of STATUS register
     movf	PCLATH,W
     movwf       pclath_copy
+    banksel	PIE1
+    bcf		PIE1, RCIE	 ;disable UART receive interrupts
 	
     ;Determine source of interrupt
+    btfsc	INTCON, IOCIF	 ;change on PORTB?
+    goto	PORTBchange
     banksel	PIR1
-    btfsc	PIR1, RCIF	    ;UART receive interrupt?
+    btfsc	PIR1, RCIF	 ;UART receive interrupt?
     goto	UartReceive
+    goto	isrEnd
+    ;determine source of PORTB interrupt
+PORTBchange
+    banksel	IOCBF
+    btfsc	IOCBF, 0         ;Leak?
+    goto	LEAK
+    goto	isrEnd
+;*********************LEAK DETECTOR INTERRUPT***********************************
+LEAK
+    movlw	.1		;1 = code for Leak
+    movwf	transData
+    call	Transmit
+    ;call	Transmit
+    ;call	Transmit
+    banksel	TXSTA
+    bcf		TXSTA, TX9D	;clear sensor data flag
+    banksel	IOCBF
+    bcf		IOCBF, 0	;clear leak flag
+    banksel	IOCBP
+    bcf		IOCBP, 0	;Leak has already been detected so disable IOC 
+				;for PORTB, 0 so ROV can still be controlled and
+				;surfaced
+    goto	isrEnd
+    
 ;*********************BEGIN UART INTERRUPT**************************************
 UartReceive
-    banksel	PIE1
-    bcf		PIE1, RCIE	    ;disable UART receive interrupts
     call	Receive
     ;1)Get "state" of ROV direction signal
     ;Check if UART packet contains a valid value for "state" (1-7)
@@ -349,7 +375,7 @@ start:
     ;initialize ESC:
     call	ESCinit
     
-    ;enable interrupts
+    ;*******************Enable interrupts***************************************
     movlw	b'11001000'
 	         ;1-------	;Enable global interrupts (GIE=1)
 		 ;-1------	;Enable peripheral interrupts (PEIE=1)
@@ -357,6 +383,12 @@ start:
 		 ;---0----	;Disable RBO/INT external interrupt (INTE=1)
 		 ;----1---	;Enable interrupt on change for PORTB (IOCIE=0)
     movwf	INTCON
+    
+    ;Enable interrupt on change for PORTB
+    movlw	b'00000001'	;PORTB,  pins set for IOC (rising edge)
+		 ;-------1	Leak Detector
+    banksel	IOCBP
+    movwf	IOCBP
     
 ;*******************************************************************************
 
