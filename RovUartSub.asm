@@ -226,6 +226,9 @@ beginInit
     goto	beginInit
     banksel	PORTD
     clrf	PORTD
+    movlw	.2
+    movwf	transData
+    call	Transmit
     retlw	0
 	
 ;*************************UART SUBROUTINES**************************************
