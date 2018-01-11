@@ -44,6 +44,7 @@ D1		    RES	    3	;Pressure value from ADC read of slave (3 bytes)
 D2		    RES	    3	;Temperature value from ADC read of slave (3 bytes)
 readCodes	    RES	    1	;code to determine what variable is being read from slave
 coeffCPY	    RES	    2	;shadow register for copying PROM coefficients
+adcCPY		    RES	    3	;shadow register for copying temp/press ADC values
 ;**********************************************************************
     ORG		0x000	
     pagesel		start	; processor reset vector
@@ -142,7 +143,7 @@ sendI2Cbyte
     call	waitMSSP
     retlw	0
 ;Write to slave device    
-I2Csend
+I2Csend;checking of ACK status giving problems after giving slave command to perform ADC read
     banksel	SSPCON2
     bsf		SSPCON2, ACKSTAT    ;set ACKSTAT (1=ACK not received)
     ;Send data and check for error, wait for it to complete
@@ -157,6 +158,10 @@ I2Csend
 twoByteReceive
     ;MSByte
     call	enReceive
+    call	sendACK
+    banksel	SSPSTAT
+    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
+    goto	$-1		    ;wait till buffer full
     banksel	SSPBUF
     movfw	SSPBUF
     banksel	coeffCPY+1
@@ -173,6 +178,42 @@ twoByteReceive
     movwf	coeffCPY
     call	sendNACK
     call	I2CStop
+    retlw	0
+;Receive 24 bit values from slave device
+threeByteReceive
+    ;MSByte
+    call	enReceive
+    call	sendACK
+    banksel	SSPSTAT
+    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
+    goto	$-1		    ;wait till buffer full
+    banksel	SSPBUF
+    movfw	SSPBUF
+    banksel	adcCPY+2
+    movwf	adcCPY+2
+    ;2nd byte
+    call	enReceive
+    call	sendACK
+    banksel	SSPSTAT
+    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
+    goto	$-1		    ;wait till buffer full
+    banksel	SSPBUF
+    movfw	SSPBUF
+    banksel	adcCPY+1
+    movwf	adcCPY+1
+    ;LSByte
+    call	enReceive
+    call	sendACK
+    banksel	SSPSTAT
+    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
+    goto	$-1		    ;wait till buffer full
+    banksel	SSPBUF
+    movfw	SSPBUF
+    banksel	adcCPY
+    movwf	adcCPY
+    call	sendNACK
+    call	I2CStop
+    
     retlw	0
 
 start:
@@ -225,7 +266,7 @@ start:
     banksel	OSCCON
     movwf	OSCCON
     ;*********************Configure I2C*****************************************
-    movlw	b'01100111'	;SCL pin clock period=FOSC/(4*(SSPADD+1))
+    movlw	.255	;SCL pin clock period=FOSC/(4*(SSPADD+1))
 				;SSPADD=103.
 				;Baud=(4*10^6) / (4*(103+1)) = 9600 bps
     banksel	SSPADD
@@ -419,36 +460,69 @@ slaveReset
     movfw	coeffCPY	    ;low bytes
     movwf	TEMPSENS
 ;*******************Done getting PROM coefficients******************************    
+;*******************Get temperature reading (D2)********************************
+    call	I2Cstart
+    movlw	deviceAddrWrite	    ;command for device addr (write)
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend
+    ;Give slave command for 12 bit uncompensated Temperature (D2) conversion
+    movlw	.88	    ;cmd for 12 bit temp conv.
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    call	I2CStop
+    ;wait 18 mS for conversion to complete
+    movlw	.18
+    call	delayMillis
+    ;write command
+    call	I2Cstart
+    movlw	deviceAddrWrite	    ;command for device addr (write)
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    ;Give slave command to perform ADC read
+    movlw	b'00000000'	    ;cmd for ADC read
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    call	I2CStop
+    ;read command
+    call	I2Cstart
+    movlw	deviceAddrRead	    ;command for device addr (read)
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    call	threeByteReceive    ;receive temp (D2) data
     
-   
 mainLoop
-    banksel	TEMPSENS+1
-    movfw	TEMPSENS+1
-    banksel	PORTD
-    movwf	PORTD
+    ;banksel	TEMPSENS+1
+    ;movfw	TEMPSENS+1
+    ;banksel	PORTD
+    ;movwf	PORTD
     
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
     
-    banksel	TEMPSENS
-    movfw	TEMPSENS
-    banksel	PORTD
-    movwf	PORTD
+    ;banksel	TEMPSENS
+    ;movfw	TEMPSENS
+    ;banksel	PORTD
+    ;movwf	PORTD
     
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
+    ;movlw	.255
+    ;call	delayMillis
     
     goto	mainLoop
     END                       
