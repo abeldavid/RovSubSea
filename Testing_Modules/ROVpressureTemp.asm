@@ -45,6 +45,8 @@ D2		    RES	    3	;Temperature value from ADC read of slave (3 bytes)
 readCodes	    RES	    1	;code to determine what variable is being read from slave
 coeffCPY	    RES	    2	;shadow register for copying PROM coefficients
 adcCPY		    RES	    3	;shadow register for copying temp/press ADC values
+tOrP		    RES	    1	;flag used to determine whether we read temp
+				;or pressure data (0=pressure, 1=temperature)
 ;**********************************************************************
     ORG		0x000	
     pagesel		start	; processor reset vector
@@ -75,6 +77,8 @@ I2Cstart
     bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, SEN
+    btfsc	SSPCON2, SEN
+    goto	$-1
     call	waitMSSP
     retlw	0
 ;Send STOP condition and wait for it to complete
@@ -83,6 +87,8 @@ I2CStop
     bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, PEN
+    btfsc	SSPCON2, PEN	    ;PEN auto cleared by hardware when finished
+    goto	$-1
     call	waitMSSP
     retlw	0
 ;Send RESTART condition and wait for it to complete
@@ -91,6 +97,8 @@ I2Crestart
     bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, RSEN
+    btfsc	SSPCON2, RSEN	    ;RSEN auto cleared by hardware when finished
+    goto	$-1
     call	waitMSSP
     retlw	0
 ;Send ACK to slave (master is in receive mode)
@@ -100,6 +108,8 @@ sendACK
     banksel	SSPCON2
     bcf		SSPCON2, ACKDT  ;(0=ACK will be sent)
     bsf		SSPCON2, ACKEN	;(ACK is now sent)
+    btfsc	SSPCON2, ACKEN	;ACKEN cleared by hardware once ACK/NACK sent
+    goto	$-1
     call	waitMSSP
     retlw	0
 ;Send NACK to slave (master is in receive mode)
@@ -108,7 +118,9 @@ sendNACK
     bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, ACKDT  ;(1=NACK will be sent)
-    bsf		SSPCON2, ACKEN	;(NACK is nor sent)
+    bsf		SSPCON2, ACKEN	;(NACK is now sent)
+    btfsc	SSPCON2, ACKEN	;ACKEN cleared by hardware once ACK/NACK sent
+    goto	$-1
     call	waitMSSP
     retlw	0
 ;Enable Receive Mode
@@ -117,6 +129,8 @@ enReceive
     bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, RCEN
+    btfss	SSPCON2, RCEN
+    goto	$-1
     call	waitMSSP
     retlw	0
 ;I2C failure routine
@@ -136,10 +150,13 @@ waitMSSP
     retlw	0
 ;Send a byte of (command or data) via I2C    
 sendI2Cbyte
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPBUF
     movwf	SSPBUF		;byte is already in work register
+    banksel	SSPSTAT
+    btfsc	SSPSTAT, BF	;wait till buffer is full (1=transfer complete)
+    goto	$-1		;not full, wait here
+    banksel	PIR1
+    bcf		PIR1, SSPIF
     call	waitMSSP
     retlw	0
 ;Write to slave device    
@@ -189,7 +206,7 @@ threeByteReceive
     goto	$-1		    ;wait till buffer full
     banksel	SSPBUF
     movfw	SSPBUF
-    banksel	adcCPY+2
+    banksel	adcCPY
     movwf	adcCPY+2
     ;2nd byte
     call	enReceive
@@ -199,7 +216,7 @@ threeByteReceive
     goto	$-1		    ;wait till buffer full
     banksel	SSPBUF
     movfw	SSPBUF
-    banksel	adcCPY+1
+    banksel	adcCPY
     movwf	adcCPY+1
     ;LSByte
     call	enReceive
@@ -211,8 +228,54 @@ threeByteReceive
     movfw	SSPBUF
     banksel	adcCPY
     movwf	adcCPY
+    
     call	sendNACK
     call	I2CStop
+    retlw	0
+    
+sensorData
+;*************Get ADC value for temp or press conversion from slave*************
+    call	I2Cstart
+    movlw	deviceAddrWrite	    ;command for device addr (write)
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend
+    ;Give slave command for 12 bit uncompensated Temp (D2) or Pressure (D1) conversion
+    banksel	tOrP
+    btfss	tOrP, 0	    ;0=pressure, 1=temperature
+    goto	pressure
+temperature
+    movlw	.88	    ;cmd for 12 bit temp conv.
+    goto	getData
+pressure
+    movlw	.72
+getData
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    call	I2CStop
+    ;wait 18 mS for conversion to complete
+    movlw	.18
+    call	delayMillis
+    ;write command
+    call	I2Cstart
+    movlw	deviceAddrWrite	    ;command for device addr (write)
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    ;Give slave command to perform ADC read
+    movlw	b'00000000'	    ;cmd for ADC read
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    call	I2CStop
+    ;read command
+    call	I2Cstart
+    movlw	deviceAddrRead	    ;command for device addr (read)
+    banksel	i2cByteToSend
+    movwf	i2cByteToSend
+    call	I2Csend		    
+    call	threeByteReceive    ;receive temp (D2) data
     
     retlw	0
 
@@ -460,40 +523,32 @@ slaveReset
     movfw	coeffCPY	    ;low bytes
     movwf	TEMPSENS
 ;*******************Done getting PROM coefficients******************************    
-;*******************Get temperature reading (D2)********************************
-    call	I2Cstart
-    movlw	deviceAddrWrite	    ;command for device addr (write)
-    banksel	i2cByteToSend
-    movwf	i2cByteToSend
-    call	I2Csend
-    ;Give slave command for 12 bit uncompensated Temperature (D2) conversion
-    movlw	.88	    ;cmd for 12 bit temp conv.
-    banksel	i2cByteToSend
-    movwf	i2cByteToSend
-    call	I2Csend		    
-    call	I2CStop
-    ;wait 18 mS for conversion to complete
-    movlw	.18
-    call	delayMillis
-    ;write command
-    call	I2Cstart
-    movlw	deviceAddrWrite	    ;command for device addr (write)
-    banksel	i2cByteToSend
-    movwf	i2cByteToSend
-    call	I2Csend		    
-    ;Give slave command to perform ADC read
-    movlw	b'00000000'	    ;cmd for ADC read
-    banksel	i2cByteToSend
-    movwf	i2cByteToSend
-    call	I2Csend		    
-    call	I2CStop
-    ;read command
-    call	I2Cstart
-    movlw	deviceAddrRead	    ;command for device addr (read)
-    banksel	i2cByteToSend
-    movwf	i2cByteToSend
-    call	I2Csend		    
-    call	threeByteReceive    ;receive temp (D2) data
+;******************Get ADC values for temp and press****************************
+    ;First get temperature
+    banksel	tOrP
+    bsf		tOrP, 0		    ;1=temperature ADC reading
+    call	sensorData	    ;perform temperature reading
+    ;place result of temperature ADC read into D2
+    banksel	adcCPY
+    movfw	adcCPY+2	    ;MSBytes
+    movwf	D2+2
+    movfw	adcCPY+1
+    movwf	D2+1
+    movfw	adcCPY
+    movwf	D2
+    ;Now get pressure (not currently working)
+    banksel	tOrP
+    bcf		tOrP, 0		    ;0=Pressure ADC reading
+    call	sensorData	    ;perform pressure reading
+    ;place result of temperature ADC read into D2
+    banksel	adcCPY
+    movfw	adcCPY+2	    ;MSBytes
+    movwf	D1+2
+    movfw	adcCPY+1
+    movwf	D1+1
+    movfw	adcCPY
+    movwf	D1
+    
     
 mainLoop
     ;banksel	TEMPSENS+1
