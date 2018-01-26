@@ -42,7 +42,6 @@ TEMPSENS	    RES	    2	;Temp coeff of temperature (2 bytes) from PROM
 i2cByteToSend	    RES	    1
 D1		    RES	    3	;Pressure value from ADC read of slave (3 bytes)
 D2		    RES	    3	;Temperature value from ADC read of slave (3 bytes)
-readCodes	    RES	    1	;code to determine what variable is being read from slave
 coeffCPY	    RES	    2	;shadow register for copying PROM coefficients
 adcCPY		    RES	    3	;shadow register for copying temp/press ADC values
 tOrP		    RES	    1	;flag used to determine whether we read temp
@@ -79,7 +78,7 @@ I2Cstart
     bsf		SSPCON2, SEN
     btfsc	SSPCON2, SEN
     goto	$-1
-    call	waitMSSP
+    ;call	waitMSSP
     retlw	0
 ;Send STOP condition and wait for it to complete
 I2CStop
@@ -89,7 +88,7 @@ I2CStop
     bsf		SSPCON2, PEN
     btfsc	SSPCON2, PEN	    ;PEN auto cleared by hardware when finished
     goto	$-1
-    call	waitMSSP
+    ;call	waitMSSP
     retlw	0
 ;Send RESTART condition and wait for it to complete
 I2Crestart
@@ -99,7 +98,7 @@ I2Crestart
     bsf		SSPCON2, RSEN
     btfsc	SSPCON2, RSEN	    ;RSEN auto cleared by hardware when finished
     goto	$-1
-    call	waitMSSP
+    ;call	waitMSSP
     retlw	0
 ;Send ACK to slave (master is in receive mode)
 sendACK
@@ -110,7 +109,7 @@ sendACK
     bsf		SSPCON2, ACKEN	;(ACK is now sent)
     btfsc	SSPCON2, ACKEN	;ACKEN cleared by hardware once ACK/NACK sent
     goto	$-1
-    call	waitMSSP
+    ;call	waitMSSP
     retlw	0
 ;Send NACK to slave (master is in receive mode)
 sendNACK
@@ -121,7 +120,7 @@ sendNACK
     bsf		SSPCON2, ACKEN	;(NACK is now sent)
     btfsc	SSPCON2, ACKEN	;ACKEN cleared by hardware once ACK/NACK sent
     goto	$-1
-    call	waitMSSP
+    ;call	waitMSSP
     retlw	0
 ;Enable Receive Mode
 enReceive
@@ -155,12 +154,12 @@ sendI2Cbyte
     banksel	SSPSTAT
     btfsc	SSPSTAT, BF	;wait till buffer is full (1=transfer complete)
     goto	$-1		;not full, wait here
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     call	waitMSSP
     retlw	0
 ;Write to slave device    
 I2Csend;checking of ACK status giving problems after giving slave command to perform ADC read
+    banksel	PIR1
+    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, ACKSTAT    ;set ACKSTAT (1=ACK not received)
     ;Send data and check for error, wait for it to complete
@@ -206,7 +205,7 @@ threeByteReceive
     goto	$-1		    ;wait till buffer full
     banksel	SSPBUF
     movfw	SSPBUF
-    banksel	adcCPY
+    banksel	adcCPY+2
     movwf	adcCPY+2
     ;2nd byte
     call	enReceive
@@ -216,7 +215,7 @@ threeByteReceive
     goto	$-1		    ;wait till buffer full
     banksel	SSPBUF
     movfw	SSPBUF
-    banksel	adcCPY
+    banksel	adcCPY+1
     movwf	adcCPY+1
     ;LSByte
     call	enReceive
@@ -228,9 +227,9 @@ threeByteReceive
     movfw	SSPBUF
     banksel	adcCPY
     movwf	adcCPY
-    
     call	sendNACK
     call	I2CStop
+    
     retlw	0
     
 sensorData
@@ -248,6 +247,7 @@ temperature
     movlw	.88	    ;cmd for 12 bit temp conv.
     goto	getData
 pressure
+    
     movlw	.72
 getData
     banksel	i2cByteToSend
@@ -274,7 +274,7 @@ getData
     movlw	deviceAddrRead	    ;command for device addr (read)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
-    call	I2Csend		    
+    call	I2Csend	
     call	threeByteReceive    ;receive temp (D2) data
     
     retlw	0
@@ -379,7 +379,7 @@ slaveReset
     movwf	i2cByteToSend
     call	I2Csend		    
     ;Send address to be read
-    movlw	.162		    ;addr for SENS (C1)
+    movlw	.160		    ;addr for SENS (C1)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     call	I2Csend		    ;send command for PROM read
@@ -404,7 +404,7 @@ slaveReset
     movwf	i2cByteToSend
     call	I2Csend
     ;Send address to be read
-    movlw	.164		    ;addr for OFF (C2)
+    movlw	.162		    ;addr for OFF (C2)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     call	I2Csend		    ;send command for PROM read
@@ -429,7 +429,7 @@ slaveReset
     movwf	i2cByteToSend
     call	I2Csend
     ;Send address to be read
-    movlw	.166		    ;addr for OFF (C2)
+    movlw	.164		    ;addr for OFF (C2)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     call	I2Csend		    ;send command for PROM read
@@ -454,7 +454,7 @@ slaveReset
     movwf	i2cByteToSend
     call	I2Csend
     ;Send address to be read
-    movlw	.168		    ;addr for OFF (C2)
+    movlw	.166		    ;addr for OFF (C2)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     call	I2Csend		    ;send command for PROM read
@@ -479,7 +479,7 @@ slaveReset
     movwf	i2cByteToSend
     call	I2Csend
     ;Send address to be read
-    movlw	.170		    ;addr for OFF (C2)
+    movlw	.168		    ;addr for OFF (C2)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     call	I2Csend		    ;send command for PROM read
@@ -504,7 +504,7 @@ slaveReset
     movwf	i2cByteToSend
     call	I2Csend
     ;Send address to be read
-    movlw	.172		    ;addr for OFF (C2)
+    movlw	.170		    ;addr for OFF (C2)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     call	I2Csend		    ;send command for PROM read
@@ -524,12 +524,14 @@ slaveReset
     movwf	TEMPSENS
 ;*******************Done getting PROM coefficients******************************    
 ;******************Get ADC values for temp and press****************************
+    banksel	tOrP
+    clrf	tOrP
     ;First get temperature
     banksel	tOrP
     bsf		tOrP, 0		    ;1=temperature ADC reading
     call	sensorData	    ;perform temperature reading
     ;place result of temperature ADC read into D2
-    banksel	adcCPY
+    banksel	adcCPY+2
     movfw	adcCPY+2	    ;MSBytes
     movwf	D2+2
     movfw	adcCPY+1
@@ -539,9 +541,10 @@ slaveReset
     ;Now get pressure (not currently working)
     banksel	tOrP
     bcf		tOrP, 0		    ;0=Pressure ADC reading
+    ;YET ANOTHER PROBLEM WITH WAITMSSP IN FIRST CALL TO I2CSEND OF SENSOR DATA
     call	sensorData	    ;perform pressure reading
-    ;place result of temperature ADC read into D2
-    banksel	adcCPY
+    ;place result of pressure ADC read into D1
+    banksel	adcCPY+2
     movfw	adcCPY+2	    ;MSBytes
     movwf	D1+2
     movfw	adcCPY+1
@@ -551,35 +554,10 @@ slaveReset
     
     
 mainLoop
-    ;banksel	TEMPSENS+1
-    ;movfw	TEMPSENS+1
-    ;banksel	PORTD
-    ;movwf	PORTD
+
     
-    ;movlw	.255
-    ;call	delayMillis
-    ;movlw	.255
-    ;call	delayMillis
-    ;movlw	.255
-    ;call	delayMillis
-    ;movlw	.255
-    ;call	delayMillis
-    
-    ;banksel	TEMPSENS
-    ;movfw	TEMPSENS
-    ;banksel	PORTD
-    ;movwf	PORTD
-    
-    ;movlw	.255
-    ;call	delayMillis
-    ;movlw	.255
-    ;call	delayMillis
-    ;movlw	.255
-    ;call	delayMillis
-    ;movlw	.255
-    ;call	delayMillis
-    
-    goto	mainLoop
+iii   
+    goto	iii
     END                       
 
 
