@@ -72,8 +72,6 @@ waitTmr0
 ;***************************I2C subroutines*************************************
 ;Send START condition and wait for it to complete
 I2Cstart
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, SEN
     btfsc	SSPCON2, SEN
@@ -82,8 +80,6 @@ I2Cstart
     retlw	0
 ;Send STOP condition and wait for it to complete
 I2CStop
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, PEN
     btfsc	SSPCON2, PEN	    ;PEN auto cleared by hardware when finished
@@ -92,8 +88,6 @@ I2CStop
     retlw	0
 ;Send RESTART condition and wait for it to complete
 I2Crestart
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, RSEN
     btfsc	SSPCON2, RSEN	    ;RSEN auto cleared by hardware when finished
@@ -102,19 +96,13 @@ I2Crestart
     retlw	0
 ;Send ACK to slave (master is in receive mode)
 sendACK
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bcf		SSPCON2, ACKDT  ;(0=ACK will be sent)
     bsf		SSPCON2, ACKEN	;(ACK is now sent)
-    btfsc	SSPCON2, ACKEN	;ACKEN cleared by hardware once ACK/NACK sent
-    goto	$-1
-    ;call	waitMSSP
+    call	waitMSSP
     retlw	0
 ;Send NACK to slave (master is in receive mode)
 sendNACK
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, ACKDT  ;(1=NACK will be sent)
     bsf		SSPCON2, ACKEN	;(NACK is now sent)
@@ -124,8 +112,6 @@ sendNACK
     retlw	0
 ;Enable Receive Mode
 enReceive
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, RCEN
     btfss	SSPCON2, RCEN
@@ -134,32 +120,34 @@ enReceive
     retlw	0
 ;I2C failure routine
 I2CFail
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, PEN	;Send stop condition
     call	waitMSSP
     retlw	0
 ;I2C wait routine   
 waitMSSP
-    banksel	PIR1
-    btfss	PIR1, SSPIF	;check if done with i2c operation (SSPIF=1 if complete)
-    goto	$-1		;i2c module not ready yet
-    bcf		PIR1, SSPIF	;i2c module ready, clear flag
+    banksel	SSPSTAT
+    btfsc	SSPSTAT, 2	;(1=transmit in progress, 0=no trans in progress
+    goto	$-1		;trans in progress so wait
+    banksel	SSPCON2
+    movfw	SSPCON2		;get copy of SSPCON2
+    andlw	b'00011111'	;mask out bits that specify something going on
+				;ACEKN, RCEN, PEN, RSEN, SEN = 1 then wait
+    btfss	STATUS, Z	;0=all good, proceed
+    goto	$-3		;1=not done doing something so retest and wait
+    
     retlw	0
 ;Send a byte of (command or data) via I2C    
 sendI2Cbyte
     banksel	SSPBUF
     movwf	SSPBUF		;byte is already in work register
     banksel	SSPSTAT
-    btfsc	SSPSTAT, BF	;wait till buffer is full (1=transfer complete)
+    btfsc	SSPSTAT, 2	;wait till buffer is full (when RW=1=transfer complete)
     goto	$-1		;not full, wait here
     call	waitMSSP
     retlw	0
 ;Write to slave device    
 I2Csend;checking of ACK status giving problems after giving slave command to perform ADC read
-    banksel	PIR1
-    bcf		PIR1, SSPIF
     banksel	SSPCON2
     bsf		SSPCON2, ACKSTAT    ;set ACKSTAT (1=ACK not received)
     ;Send data and check for error, wait for it to complete
@@ -173,21 +161,17 @@ I2Csend;checking of ACK status giving problems after giving slave command to per
 ;Receive 16 bit values from slave device
 twoByteReceive
     ;MSByte
-    call	enReceive
     call	sendACK
-    banksel	SSPSTAT
-    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
-    goto	$-1		    ;wait till buffer full
+    call	enReceive
+    call	waitMSSP
     banksel	SSPBUF
     movfw	SSPBUF
     banksel	coeffCPY+1
     movwf	coeffCPY+1
     ;LSByte
-    call	enReceive
     call	sendACK
-    banksel	SSPSTAT
-    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
-    goto	$-1		    ;wait till buffer full
+    call	enReceive
+    call	waitMSSP
     banksel	SSPBUF
     movfw	SSPBUF
     banksel	coeffCPY
@@ -198,31 +182,26 @@ twoByteReceive
 ;Receive 24 bit values from slave device
 threeByteReceive
     ;MSByte
-    call	enReceive
     call	sendACK
-    banksel	SSPSTAT
-    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
-    goto	$-1		    ;wait till buffer full
+    call	enReceive
+    call	waitMSSP
     banksel	SSPBUF
     movfw	SSPBUF
     banksel	adcCPY+2
     movwf	adcCPY+2
     ;2nd byte
-    call	enReceive
     call	sendACK
-    banksel	SSPSTAT
-    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
-    goto	$-1		    ;wait till buffer full
+    call	enReceive
+    banksel	SSPCON2
+    call	waitMSSP
     banksel	SSPBUF
     movfw	SSPBUF
     banksel	adcCPY+1
     movwf	adcCPY+1
     ;LSByte
-    call	enReceive
     call	sendACK
-    banksel	SSPSTAT
-    btfss	SSPSTAT, BF	    ;buffer full yet? (0=no/not done, 1=yes/done)
-    goto	$-1		    ;wait till buffer full
+    call	enReceive
+    call	waitMSSP
     banksel	SSPBUF
     movfw	SSPBUF
     banksel	adcCPY
@@ -247,12 +226,11 @@ temperature
     movlw	.88	    ;cmd for 12 bit temp conv.
     goto	getData
 pressure
-    
     movlw	.72
 getData
     banksel	i2cByteToSend
     movwf	i2cByteToSend
-    call	I2Csend		    
+    call	I2Csend	
     call	I2CStop
     ;wait 18 mS for conversion to complete
     movlw	.18
@@ -538,11 +516,10 @@ slaveReset
     movwf	D2+1
     movfw	adcCPY
     movwf	D2
-    ;Now get pressure (not currently working)
     banksel	tOrP
-    bcf		tOrP, 0		    ;0=Pressure ADC reading
-    ;YET ANOTHER PROBLEM WITH WAITMSSP IN FIRST CALL TO I2CSEND OF SENSOR DATA
+    clrf	tOrP		    ;0=Pressure ADC reading
     call	sensorData	    ;perform pressure reading
+    
     ;place result of pressure ADC read into D1
     banksel	adcCPY+2
     movfw	adcCPY+2	    ;MSBytes
@@ -554,9 +531,43 @@ slaveReset
     
     
 mainLoop
-
+iii
+    banksel	D2
+    movfw	D2+2
+    banksel	PORTD
+    movwf	PORTD
     
-iii   
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    
+    banksel	D1
+    movfw	D1+2
+    banksel	PORTD
+    movwf	PORTD
+    
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+    movlw	.254
+    call	delayMillis
+   
     goto	iii
     END                       
 
