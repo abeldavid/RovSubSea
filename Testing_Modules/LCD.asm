@@ -14,8 +14,7 @@
     global  displayHeaders
     
 GENVAR		UDATA_SHR
-stringIndex1	RES	1
-stringIndex2	RES	1	
+	
 ;Set command mode
 .lcd code
 RS0
