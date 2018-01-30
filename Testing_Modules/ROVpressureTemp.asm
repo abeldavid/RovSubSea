@@ -17,7 +17,12 @@
     #define deviceAddrWrite  (b'11101100')
     #define deviceAddrRead   (b'11101101')
     #define deviceReset	     (d'30')
-
+    
+    global  delayMillis
+    extern  displayHeaders
+    extern  LCDInit
+    
+    
     __CONFIG _CONFIG1,    _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_XT & _FCMEN_OFF & _IESO_OFF
 
 ;Context saving variables:
@@ -30,6 +35,7 @@ pclath_temp	    RES	    1
 GENVAR		    UDATA_SHR
 cnt1Millis	    RES	    1
 userMillis	    RES	    1
+
 	   
 ;Non-shared variables
 GENVAR1		    UDATA
@@ -335,6 +341,7 @@ start:
     clrf	PORTD
     movlw	.10
     call	delayMillis
+    call	LCDInit
 ;Reset sequence for slave device
 slaveReset
     call	I2Cstart
@@ -531,44 +538,10 @@ slaveReset
     
     
 mainLoop
-iii
-    banksel	D2
-    movfw	D2+2
-    banksel	PORTD
-    movwf	PORTD
-    
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    
-    banksel	D1
-    movfw	D1+2
-    banksel	PORTD
-    movwf	PORTD
-    
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-    movlw	.254
-    call	delayMillis
-   
-    goto	iii
+
+    call    displayHeaders
+finito
+    goto    finito
     END                       
 
 
