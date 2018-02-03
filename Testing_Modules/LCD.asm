@@ -12,6 +12,8 @@
     
     global  LCDInit
     global  displayHeaders
+    global  sendData
+    global  sendCommand
     
 GENVAR		UDATA_SHR
 	
