@@ -20,42 +20,76 @@
     extern	sixteenMplier
     extern	loopCount
     extern	mulResult16
+    extern	delayMillis
     
 .math code
 mul16
     ;Low Bytes
-    movlw	.8
+    movlw	.15
     banksel	loopCount
     movwf	loopCount
-lowByte
+    
+checkLsb
+    banksel	sixteenMplier
+    movfw	sixteenMplier
+    banksel	PORTD
+    movwf	PORTD
+    movlw	.255
+    call	delayMillis
+    movlw	.255
+    call	delayMillis
+    movlw	.255
+    call	delayMillis
+    movlw	.255
+    call	delayMillis
+    banksel	sixteenMplier
+    
     btfss	sixteenMplier, 0    ;Test lsb of multiplier
-    goto	shiftLow	    ;It's zero so proceed
-    movfw	sixteenMpcand	    ;It's not zero so add multiplicand to result
+    goto	shift	    ;It's zero so proceed to shifts
+    
+    ;lsb of multiplier is not zero so add multiplicand (3 bytes after 8 left-shifts)
+    ;to product/result (4bytes)
+    movfw	sixteenMpcand	    ;add byte 0
+    addwf	mulResult16, f
+    
+    movfw	sixteenMpcand+1	    ;add byte 1
+    btfsc	STATUS, C	    ;overflow from addition?
+    incfsz	sixteenMpcand+1, w  ;yes so increment the number to be added to 2nd byte of result
+    addwf	mulResult16+1, f
+    
+    movfw	sixteenMpcand+2	    ;add byte 2
+    btfsc	STATUS, C	    ;overflow from addition?
+    incfsz	sixteenMpcand+2, w  ;yes so increment the number to be added to 3rd byte of result
+    addwf	mulResult16+2, f    
+    
+    btfsc	STATUS, C	    ;overflow from addition?
+    movlw	.1
+    addwf	mulResult16+3, f    ;yes so add one to 4th byte of result
+    
+    ;perform left shit on multiplicand
+shift
     bcf		STATUS, C	    ;Clear carry bit
-    addwf	mulResult16, f	    
-    btfss	STATUS, C	    ;Did this addition overflow first byte of result
-    goto	shiftLow	    ;No so proceed
-    movlw	.1		    ;It did cause an overflow
+    rlf		sixteenMpcand, f    ;Shift multiplicand (low byte)left one bit
     bcf		STATUS, C	    ;Clear carry bit
-    addwf	mulResult16+1, f    ;so add one to second byte of result
-    btfss	STATUS, C	    ;Did this addition overflow second byte of result
-    goto	shiftLow	    ;No so proceed
-    movlw	.1		    ;It did cause an overflow
+    rlf		sixteenMpcand+1, f
+    
+    ;and right shift on multiplier
     bcf		STATUS, C	    ;Clear carry bit
-    addwf	mulResult16+2, f    ;so add one to third byte of result
-    btfss	STATUS, C	    ;Did this addition overflow third byte of result
-    goto	shiftLow	    ;No so proceed
-    movlw	.1		    ;It did cause an overflow
-    addwf	mulResult16+3, f    ;so add one to fourth byte of result
-shiftLow
+    rrf		sixteenMplier+1, f  ;Shift multiplier right one bit
+    btfss	STATUS, C	    ;Did right shift result in a carry?
+    goto	noCarryMplr
     bcf		STATUS, C	    ;Clear carry bit
-    rlf		sixteenMpcand, f    ;Shift multiplicand left one bit
     rrf		sixteenMplier, f    ;Shift multiplier right one bit
-    decfsz	loopCount	    ;decrement loop counter
-    goto	lowByte		    ;Haven't done this for all 8 bits yet
+    bsf		sixteenMplier, 7
+noCarryMplr
+    bcf		STATUS, C	    ;Clear carry bit
+    rrf		sixteenMplier, f    ;Shift multiplier right one bit
     
-highByte
+    ;*****REMEMBER TO RIGHT SHIFT BOTH BYTES OF MULTIPLIER AND ACCOUNT FOR CARRY
     
+    ;decrement loop counter
+    decfsz	loopCount, f
+    goto	checkLsb	    ;reloop 16 times
     
     retlw	0
 ;**********************Get Temperature Data************************************* 
@@ -71,32 +105,40 @@ getTemp
     clrf	deeT+2
     clrf	deeT+1
     clrf	deeT
+    banksel	sixteenMplier
     clrf	sixteenMplier
     clrf	sixteenMplier+1
     clrf	sixteenMpcand
     clrf	sixteenMpcand+1
+    clrf	sixteenMpcand+2
     clrf	mulResult16
     clrf	mulResult16+1
     clrf	mulResult16+2
     clrf	mulResult16+3
-    
+    banksel	PORTD
+    clrf	PORTD
 
 ;multiply sixByteNum (2^8 = 256, 16 bit number) by Tref (C5) (C5=16 bit number)
     ;place 256 into sixteenMplier
-    movlw	.2
+    movlw	.1
     banksel	sixteenMplier
-    movwf	sixteenMplier	
+    movwf	sixteenMplier+1
+    clrf	sixteenMplier
     ;place Tref into sixteenMpcand
-    movlw	.2
+    movfw	Tref
     banksel	sixteenMpcand
-    call	mul16
+    movwf	sixteenMpcand
+    movfw	Tref+1
+    movwf	sixteenMpcand+1
     
+    pagesel	mul16
     call	mul16
-    banksel	sixteenMpcand
-    movfw	sixteenMpcand
-    banksel	PORTD
-    movwf	PORTD
-   
+    pagesel$
+    
+wer
+    
+    goto	wer
+    
     ;place value of D2 (3 bytes) into deeT (dT=4 bytes signed)
     
  

@@ -65,7 +65,7 @@ tOrP		    RES	    1	;flag used to determine whether we read temp
 							;or pressure data (0=pressure, 1=temperature)
 sixByteNum	    RES		6
 deeT		    RES		4   ;dT=signed 32 bit int
-sixteenMpcand	    RES		2   ;16 bit multiplicand 
+sixteenMpcand	    RES		3   ;16 bit multiplicand 
 sixteenMplier	    RES		2   ;16 bit multiplier
 mulResult16	    RES		4
 loopCount	    RES		1   ;counter for multiplication loops
@@ -556,7 +556,7 @@ slaveReset
     movwf	D1
     
     ;display "Temp:" and "Press:" headers on LCD
-    call	displayHeaders
+    ;call	displayHeaders
     pagesel	getTemp
     call	getTemp
     pagesel$
