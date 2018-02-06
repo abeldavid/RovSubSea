@@ -16,80 +16,68 @@
     extern	D2
     extern	deeT
     extern	sendData
-    extern	sixteenMpcand
-    extern	sixteenMplier
     extern	loopCount
-    extern	mulResult16
     extern	delayMillis
+	extern	product16
+	extern	mCand16
     
 .math code
 mul16
-    ;Low Bytes
-    movlw	.15
+    movlw	.16			;loop through 32 times 
     banksel	loopCount
     movwf	loopCount
-    
+;Multiplier occupies the lower 2 bytes of the product register and its lsb acts 
+;as the control mechanism
+;1) Check the lsb of product register (multiplier)
 checkLsb
-    banksel	sixteenMplier
-    movfw	sixteenMplier
-    banksel	PORTD
-    movwf	PORTD
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    movlw	.255
-    call	delayMillis
-    banksel	sixteenMplier
-    
-    btfss	sixteenMplier, 0    ;Test lsb of multiplier
-    goto	shift	    ;It's zero so proceed to shifts
-    
-    ;lsb of multiplier is not zero so add multiplicand (3 bytes after 8 left-shifts)
-    ;to product/result (4bytes)
-    movfw	sixteenMpcand	    ;add byte 0
-    addwf	mulResult16, f
-    
-    movfw	sixteenMpcand+1	    ;add byte 1
-    btfsc	STATUS, C	    ;overflow from addition?
-    incfsz	sixteenMpcand+1, w  ;yes so increment the number to be added to 2nd byte of result
-    addwf	mulResult16+1, f
-    
-    movfw	sixteenMpcand+2	    ;add byte 2
-    btfsc	STATUS, C	    ;overflow from addition?
-    incfsz	sixteenMpcand+2, w  ;yes so increment the number to be added to 3rd byte of result
-    addwf	mulResult16+2, f    
-    
-    btfsc	STATUS, C	    ;overflow from addition?
-    movlw	.1
-    addwf	mulResult16+3, f    ;yes so add one to 4th byte of result
-    
-    ;perform left shit on multiplicand
-shift
-    bcf		STATUS, C	    ;Clear carry bit
-    rlf		sixteenMpcand, f    ;Shift multiplicand (low byte)left one bit
-    bcf		STATUS, C	    ;Clear carry bit
-    rlf		sixteenMpcand+1, f
-    
-    ;and right shift on multiplier
-    bcf		STATUS, C	    ;Clear carry bit
-    rrf		sixteenMplier+1, f  ;Shift multiplier right one bit
-    btfss	STATUS, C	    ;Did right shift result in a carry?
-    goto	noCarryMplr
-    bcf		STATUS, C	    ;Clear carry bit
-    rrf		sixteenMplier, f    ;Shift multiplier right one bit
-    bsf		sixteenMplier, 7
-noCarryMplr
-    bcf		STATUS, C	    ;Clear carry bit
-    rrf		sixteenMplier, f    ;Shift multiplier right one bit
-    
-    ;*****REMEMBER TO RIGHT SHIFT BOTH BYTES OF MULTIPLIER AND ACCOUNT FOR CARRY
-    
+	btfss	product16, 0		;lsb=1?
+	goto	shiftProduct	    ;No so proceed to shift the product register
+	;lsb=1 so add multiplicand to left-half of product register and place result
+	;in left half of product register
+	banksel	mCand16
+	movfw	mCand16
+	addwf	product16+2, f	     ;Add LSB of multiplicand to 3rd byte of product
+	movfw	mCand16+1
+	btfsc	STATUS, C		     ;increment 4th byte of product if carry from addition
+	incfsz	mCand16+1, w
+	addwf	product16+3			;Add 2nd byte of multiplicanf to 4th byte of product
+;2)Shift the product register right one bit
+shiftProduct
+	;1st Byte
+	bcf		STATUS, C			;Clear carry
+	rrf		product16, f		;right shift 1st byte
+	;2nd Byte
+	bcf		STATUS, C
+	rrf		product16+1, f		;right shift 2nd byte
+	btfsc	STATUS, C			;Carry due to right shift of 2nd byte?
+	bsf		product16, 7		;Yes so shift that bit into byte 1
+	;3rd Byte
+	bcf		STATUS, C			;Clear carry
+	rrf		product16+2			;right shift 3rd byte
+	btfsc	STATUS, C			;Carry due to right shift of 3rd byte?
+	bsf		product16+1, 7		;Yes so shift that bit into byte 2
+	;4th Byte
+	bcf		STATUS, C			;Clear carry
+	rrf		product16+3			;right shift 4th byte
+	btfsc	STATUS, C			;Carry due to right shift of 4th byte?
+	bsf		product16+2, 7		;Yes so shift that bit into byte 3
+	
+decrement    
+	
+	movfw	product16+3
+	banksel	PORTD
+	movwf	PORTD
+	movlw	.255
+	call	delayMillis
+	movlw	.255
+	call	delayMillis
+	
+	
+	
+	
     ;decrement loop counter
     decfsz	loopCount, f
-    goto	checkLsb	    ;reloop 16 times
+    goto	checkLsb	    ;reloop 32 times
     
     retlw	0
 ;**********************Get Temperature Data************************************* 
@@ -105,31 +93,25 @@ getTemp
     clrf	deeT+2
     clrf	deeT+1
     clrf	deeT
-    banksel	sixteenMplier
-    clrf	sixteenMplier
-    clrf	sixteenMplier+1
-    clrf	sixteenMpcand
-    clrf	sixteenMpcand+1
-    clrf	sixteenMpcand+2
-    clrf	mulResult16
-    clrf	mulResult16+1
-    clrf	mulResult16+2
-    clrf	mulResult16+3
+	clrf	product16
+	clrf	product16+1
+	clrf	product16+2
+	clrf	product16+3
+    
     banksel	PORTD
     clrf	PORTD
 
 ;multiply sixByteNum (2^8 = 256, 16 bit number) by Tref (C5) (C5=16 bit number)
-    ;place 256 into sixteenMplier
-    movlw	.1
-    banksel	sixteenMplier
-    movwf	sixteenMplier+1
-    clrf	sixteenMplier
-    ;place Tref into sixteenMpcand
-    movfw	Tref
-    banksel	sixteenMpcand
-    movwf	sixteenMpcand
-    movfw	Tref+1
-    movwf	sixteenMpcand+1
+    ;1)Place multiplier (Tref) into lower 2 bytes of product register
+	banksel	Tref
+	movfw	Tref
+	movwf	product16
+	movfw	Tref+1
+	movwf	product16+1
+	;2)Place 256 into multiplicand
+	movlw	.1
+	movwf	mCand16+1
+	clrf	mCand16
     
     pagesel	mul16
     call	mul16

@@ -24,10 +24,9 @@
     global	D2
     global	sixByteNum
     global	deeT
-    global	sixteenMpcand
-    global	sixteenMplier
     global	loopCount
-    global	mulResult16
+	global	product16
+	global	mCand16
     
     extern  displayHeaders
     extern  LCDInit
@@ -51,26 +50,27 @@ userMillis	    RES	    1
 ;Non-shared variables
 GENVAR1		    UDATA
 SENS		    RES	    2	;Pressure Secnsitivity (2 bytes) from PROM
-OFF		    RES	    2	;Pressure Offset (2 bytes) from PROM
-TCS		    RES	    2	;Temp coeff of pressure sensitivity (2 bytes) from PROM
-TCO		    RES	    2	;Temp coeff of pressure offset (2 bytes) from PROM
+OFF				RES	    2	;Pressure Offset (2 bytes) from PROM
+TCS				RES	    2	;Temp coeff of pressure sensitivity (2 bytes) from PROM
+TCO				RES	    2	;Temp coeff of pressure offset (2 bytes) from PROM
 Tref		    RES	    2	;Reference temperature (2 bytes) from PROM
 TEMPSENS	    RES	    2	;Temp coeff of temperature (2 bytes) from PROM	
-i2cByteToSend	    RES	    1
-D1		    RES	    3	;Pressure value from ADC read of slave (3 bytes)
-D2		    RES	    3	;Temperature value from ADC read of slave (3 bytes)
+i2cByteToSend	RES	    1
+D1				RES	    3	;Pressure value from ADC read of slave (3 bytes)
+D2				RES	    3	;Temperature value from ADC read of slave (3 bytes)
 coeffCPY	    RES	    2	;shadow register for copying PROM coefficients
 adcCPY		    RES	    3	;shadow register for copying temp/press ADC values
 tOrP		    RES	    1	;flag used to determine whether we read temp
 							;or pressure data (0=pressure, 1=temperature)
 sixByteNum	    RES		6
 deeT		    RES		4   ;dT=signed 32 bit int
-sixteenMpcand	    RES		3   ;16 bit multiplicand 
-sixteenMplier	    RES		2   ;16 bit multiplier
-mulResult16	    RES		4
 loopCount	    RES		1   ;counter for multiplication loops
-TEMPB1		    RES		1   ;TEMPB1 and TEMPB0 for 16 bit mul routine
-TEMPB0		    RES		1
+product16		RES		4	;Holds both 16bit multiplier (lower 2 bytes)
+							;and product for 16x16 multiplication routine.
+							;lsb of product16= lsb of multiplier = control for 
+							;multiplication routine
+mCand16			RES		2	;16 bit multiplicand for 16x16 	multiplication routine						
+
 ;**********************************************************************
     ORG		0x000	
     pagesel		start	; processor reset vector
@@ -556,7 +556,7 @@ slaveReset
     movwf	D1
     
     ;display "Temp:" and "Press:" headers on LCD
-    ;call	displayHeaders
+    call	displayHeaders
     pagesel	getTemp
     call	getTemp
     pagesel$
