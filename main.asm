@@ -1,11 +1,26 @@
 ;Receive PWM values from topside via UART, decode packets and send PWM value to 
 ;appropriate thruster ESCs
 
-    list		p=16f1937	;list directive to define processor
+    list	p=16f1937	;list directive to define processor
     #include	<p16f1937.inc>		; processor specific variable definitions
 	
     errorlevel -302	;no "register not in bank 0" warnings
     errorlevel -312     ;no  "page or bank selection not needed" messages
+    errorlevel -207    ;no label after column one warning
+    
+    extern  delayMillis
+    extern  Transmit
+    extern  Receive
+    extern  processThrusterStream
+    extern  ESCinit
+    
+    global  forwardSpeed
+    global  reverseSpeed
+    global  upDownSpeed
+    global  transData
+    global  receiveData
+    global  state
+    global  readyThrust
 	
     #define BANK0  (h'000')
     #define BANK1  (h'080')
@@ -14,8 +29,8 @@
 
     __CONFIG _CONFIG1,    _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_HS & _FCMEN_OFF & _IESO_OFF
 
-;Context saving variables:
-CONTEXT	UDATA_SHR
+;Variables accessible in all banks:
+MULTIBANK	UDATA_SHR
 userMillis	RES	1
 w_copy		RES     1	;variable used for context saving (work reg)
 status_copy	RES     1	;variable used for context saving (status reg)
@@ -29,17 +44,17 @@ upDownSpeed	RES	1	;value to be placed in CCPR3L
 readyThrust	RES	1	;flag to be set when all 4 UART thruster data packets 
 				;have been received
 ;General Variables
-GENVAR	UDATA
-initCounter	RES	1	;counter for initializing ESCs
+GENVAR		UDATA
 UartReceiveCtr	RES	1	;counter for number of UART receptions
 
 ;**********************************************************************
-    ORG		0x000	
-    pagesel		start	    ;processor reset vector
-    goto		start	    ;go to beginning of program
+.reset code	0x000	
+    pagesel	start	    ;processor reset vector
+    goto	start	    ;go to beginning of program
 INT_VECTOR:
-    ORG		0x004		    ;interrupt vector location
+.Interupt code	0x004		    ;interrupt vector location
 INTERRUPT:
+
     movwf       w_copy           ;save off current W register contents
     movf	STATUS,w         ;move status register into W register
     movwf	status_copy      ;save off contents of STATUS register
@@ -65,9 +80,15 @@ PORTBchange
 LEAK
     movlw	.1		;1 = code for Leak
     movwf	transData
+    pagesel	Transmit
     call	Transmit
-    ;call	Transmit
-    ;call	Transmit
+    pagesel$
+    pagesel	Transmit
+    call	Transmit
+    pagesel$
+    pagesel	Transmit
+    call	Transmit
+    pagesel$
     banksel	TXSTA
     bcf		TXSTA, TX9D	;clear sensor data flag
     banksel	IOCBF
@@ -80,7 +101,9 @@ LEAK
     
 ;*********************BEGIN UART INTERRUPT**************************************
 UartReceive
+    pagesel	Receive
     call	Receive
+    pagesel$
     ;1)Get "state" of ROV direction signal
     ;Check if UART packet contains a valid value for "state" (1-7)
     movlw	.8		;max number for "state"=7
@@ -137,131 +160,7 @@ isrEnd
     swapf	w_copy,w        ;restore pre-isr W register contents
     retfie                      ;return from interrupt
 
-;**************Send PWM signals to thrusters************************************
-;Once all four UART thruster data packets have been received, send PWM signals
-;to thrusters
-processThrusterStream
-    ;banksel	PIE1
-    ;bcf		PIE1, RCIE	    ;disable UART receive interrupts
-    
-    ;check directional state of ROV
-    movfw	state
-    
-    ;use lookup table to get AND values for PORTD
-    call	stateLookUp
-    banksel	PORTD
-    movwf	PORTD	    ;place AND value in PORTD
-    
-    movfw	forwardSpeed
-    banksel	CCPR1L
-    movwf	CCPR1L
-    
-    movfw	reverseSpeed
-    banksel	CCPR2L
-    movwf	CCPR2L
-    
-    movfw	upDownSpeed
-    banksel	CCPR3L
-    movwf	CCPR3L
-    
-    bcf		readyThrust, 1	;clear readyThrustFlag
-    ;banksel	PIE1
-    ;bsf	PIE1, RCIE	;enable UART receive interrupts
-
-    retlw	0
-;*******************Done sending PWM to thrusters*******************************
-    
-;*******************Lookup Table to get ANDing values for PORTD ****************
-stateLookUp
-    addwf   PCL, f
-    retlw   b'11000011'	    ;0 forward (T1/T2 FWD, T3/T4 REV)
-    retlw   b'00111100'	    ;1 reverse (T3/T4 FWD, T1/T2 REV)
-    retlw   b'10100101'	    ;2 traverse right (T1/T3 FWD, T2/T4 REV)
-    retlw   b'01011010'	    ;3 traverse left (T2/T4 FWD, T1/T3 REV)
-    retlw   b'01101001'	    ;4 rotate clockwise (T1/T4 FWD, T2/T3 REV)
-    retlw   b'10010110'	    ;5 rotate counter-clockwise (T2/T3 FWD, T1/T4 REV)
-    retlw   b'00001111'	    ;6 up/down (T1/T4 FWD, T2/T3 REV)
-    retlw   b'00001111'	    ;7 stop
-    
-;*******************************************************************************
-	
-delayMillis
-    movwf	userMillis	;user defined number of milliseconds
-startDly
-    banksel	TMR0
-    clrf	TMR0
-waitTmr0
-    movfw	TMR0
-    xorlw	.125		;125 * 8uS = 1mS
-    btfss	STATUS, Z
-    goto	waitTmr0
-    decfsz	userMillis, f	;reached user defined milliseconds yet?
-    goto	startDly
-    
-    retlw	0
-    
-;Initialize ESCs with stoped signal (1500uS) for four seconds
-ESCinit
-    movlw	b'00001111'
-    banksel	PORTD
-    movwf	PORTD
-    movlw	.16
-    banksel	initCounter
-    movwf	initCounter	;16 calls to delayMillis at 250ms each = 4 sec
-    movlw	.95		;1500uS pulse width
-    banksel	CCPR2L		;ESC #2
-    movwf	CCPR2L
-    banksel	CCPR1L		;ESC #1
-    movwf	CCPR1L
-    banksel	CCPR3L
-    movwf	CCPR3L
-beginInit
-    movlw	.250
-    call	delayMillis
-    banksel	initCounter
-    decf	initCounter, f
-    movlw	.0
-    xorwf	initCounter, w
-    btfss	STATUS, Z
-    goto	beginInit
-    banksel	PORTD
-    clrf	PORTD
-    movlw	.2
-    movwf	transData
-    call	Transmit
-    retlw	0
-	
-;*************************UART SUBROUTINES**************************************
-Transmit
-wait_trans
-    banksel	PIR1
-    btfss	PIR1, TXIF	;Is TX buffer full? (1=empty, 0=full)
-    goto	wait_trans	;wait until it is empty
-    movfw	transData	
-    banksel	TXREG
-    movwf	TXREG		;data to be transmitted loaded into TXREG
-				;and then automatically loaded into TSR
-    retlw	0
-    
-Receive
-    banksel	PIR1
-wait_receive
-    btfss	PIR1, RCIF	;Is RX buffer full? (1=full, 0=notfull)
-    goto	wait_receive	;wait until it is full
-    banksel	RCSTA
-    bcf		RCSTA, CREN
-    banksel	RCREG
-    movfw	RCREG		;Place data from RCREG into "receiveData"
-    movwf	receiveData
-    banksel	PIR1
-    bcf	        PIR1, RCIF	    ;clear UART receive interrupt flag
-    banksel	RCSTA
-    bsf		RCSTA, CREN
-    retlw	0
-    
-    
-;*************************END UART SUBROUTINES**********************************
-	
+.main    code	
 start:
     banksel BANK1
     ;Set PORTS to output
@@ -367,7 +266,9 @@ start:
     banksel	RCSTA
     movwf	RCSTA
     movlw	d'20'
+    pagesel	delayMillis
     call	delayMillis
+    pagesel$
     banksel	PORTB
     clrf	PORTB
     
@@ -393,8 +294,6 @@ start:
     banksel	IOCBP
     movwf	IOCBP
     
-;*******************************************************************************
-
     banksel	ANSELB
     clrf	ANSELA
     clrf	ANSELB
@@ -403,11 +302,15 @@ start:
     
 mainLoop
     btfsc	readyThrust, 1
+    pagesel	processThrusterStream
     call	processThrusterStream
+    pagesel$
     
     goto	mainLoop
    
     END                       
+
+
 
 
 
