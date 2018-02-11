@@ -29,10 +29,13 @@
     global	mCand16
     global	TEMPSENS
     global	dtMulProduct
+    global	temp3byte
+    global	quotient
+    global	divisor
     
-    extern  displayHeaders
-    extern  LCDInit
-    extern  getTemp
+    extern	displayHeaders
+    extern	LCDInit
+    extern	getTemp
 	
 	
     __CONFIG _CONFIG1,    _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_XT & _FCMEN_OFF & _IESO_OFF
@@ -78,7 +81,10 @@ dtMulProduct	    RES	    6	;Holds both 16bit multiplier (lower 2 bytes)
 				;lsb of dtMulProduct = lsb of multiplier = control
 				;for multiplication routine
 	    
-mCand16		    RES	    2	;16 bit multiplicand for 16x16 	multiplication routine						
+mCand16		    RES	    2	;16 bit multiplicand for 16x16 	multiplication routine	
+temp3byte	    RES	    3	;temp register used in division routine 
+quotient	    RES	    6	;quotient for division routine (initially = to dtMulProduct)
+divisor		    RES	    3	;divisor for division routine
 
 ;**********************************************************************
     ORG		0x000	

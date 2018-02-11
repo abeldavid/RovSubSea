@@ -22,6 +22,9 @@
     extern	mCand16
     extern	dtMulProduct
     extern	TEMPSENS
+    extern	temp3byte
+    extern	quotient
+    extern	divisor
     
 .math code
 ;****************Multiply two 16 bit numbers (unsigned)************************************
@@ -140,8 +143,9 @@ decrement2
     goto	checkLsb2	    ;reloop 16 times    
     
     retlw	0
+;************************End dtMul routine**************************************
     
-;*********************Calculate dT**********************************************
+;*************************Calculate dT******************************************
 ;Get the variable "dT" by subtracting :product16" from "D2"
 ;D2 has already been placed in variable "deeT"
 getDt
@@ -170,7 +174,127 @@ getDt
     addwf	deeT+2, f
  
     retlw	0
-;**********************Get Temperature Data************************************* 
+;******************************End getDt routine********************************
+   
+;**************************Division Routine for temperature*********************
+;Initially quotient=dtMulProduct=dividend (6 byte number)
+;divisor = 2^23 (3 byte number)
+;loopCount = 48 (once for each bit of dividend
+;temp3byte holds value of temp3byte-divisor
+tempDiv
+    banksel	temp3byte
+beginDiv
+    ; FIRST LEFT-SHIFT TEMP3BYTE    
+    ;1) Left-shift temp3byte
+    bcf		STATUS, C	;Clear carry
+    rlf		temp3byte, f	;shift 1st byte
+    movfw	STATUS		;Mask out carry bit from STATUS register
+    andlw	.1		;STATUS, C is now in work reg	    
+    
+    ;2) Left-shift temp3Byte+1
+    bcf		STATUS, C	;Clear carry
+    rlf		temp3byte+1, f	;shift 2nd byte
+    xorwf	temp3byte+1, f	;rotate in any carry from left-shift of 1st byte
+    movfw	STATUS		;Mask out carry bit from STATUS register
+    andlw	.1		;STATUS, C is now in work reg
+    
+    ;3) Left-shift temp3Byte+2
+    bcf		STATUS, C	;Clear carry
+    rlf		temp3byte+2, f	;shift 3rd byte
+    xorwf	temp3byte+1, f	;rotate in any carry from left-shift of 2nd byte
+    
+    ; SECOND, LEFT-SHIFT DIVIDEND/DTMULPRODUCT
+    ;1) Left-shift  dtMulProduct
+    bcf		STATUS, C	;Clear carry
+    rlf		dtMulProduct, f	;shift 1st byte
+    movfw	STATUS		;Mask out carry bit from STATUS register
+    andlw	.1		;STATUS, C is now in work reg
+    
+    ;2) Left-shift dtMulProduct+1
+    bcf		STATUS, C	  ;Clear carry
+    rlf		dtMulProduct+1, f ;shift 2nd byte
+    xorwf	dtMulProduct+1, f ;rotate in any carry from left-shift of 1st byte
+    movfw	STATUS		  ;Mask out carry bit from STATUS register
+    andlw	.1		  ;STATUS, C is now in work reg
+    
+    ;3) Left-shift dtMulProduct+2
+    bcf		STATUS, C	  ;Clear carry
+    rlf		dtMulProduct+2, f ;shift 3rd byte
+    xorwf	dtMulProduct+2, f ;rotate in any carry from left-shift of 2nd byte
+    movfw	STATUS		  ;Mask out carry bit from STATUS register
+    andlw	.1		  ;STATUS, C is now in work reg
+    
+    ;4) Left-shift dtMulProduct+3
+    bcf		STATUS, C	  ;Clear carry
+    rlf		dtMulProduct+3, f ;shift 4th byte
+    xorwf	dtMulProduct+3, f ;rotate in any carry from left-shift of 3rd byte
+    movfw	STATUS		  ;Mask out carry bit from STATUS register
+    andlw	.1		  ;STATUS, C is now in work reg
+    
+    ;4) Left-shift dtMulProduct+4
+    bcf		STATUS, C	  ;Clear carry
+    rlf		dtMulProduct+4, f ;shift 5th byte
+    xorwf	dtMulProduct+4, f ;rotate in any carry from left-shift of 4th byte
+    movfw	STATUS		  ;Mask out carry bit from STATUS register
+    andlw	.1		  ;STATUS, C is now in work reg
+    
+    ;4) Left-shift dtMulProduct+5
+    bcf		STATUS, C	  ;Clear carry
+    rlf		dtMulProduct+5, f ;shift 5th byte
+    xorwf	dtMulProduct+5, f ;rotate in any carry from left-shift of 5th byte
+    movfw	STATUS		  ;Mask out carry bit from STATUS register
+    andlw	.1		  ;STATUS, C is now in work reg
+    
+    ; THIRD, SUBTRACT DIVISOR FROM TEMP3BYTE AND LEAVE RESULT IN TEMP3BYTE
+    ;1) Get the two's complement of divisor (low Byte)
+    comf	divisor, f
+    incf	divisor, f
+    ;2) add two's complement of divisor to temp3byte
+    movfw	divisor
+    addwf	temp3byte, f
+    ;3) Get the two's complement of divisor+1 (2nd Byte)
+    comf	divisor+1, f
+    incf	divisor+1, f
+    ;4) add two's complement of divisor+1 to temp3byte+1 (2nd Bytes)
+    movfw	divisor+1
+    addwf	temp3byte+1, f
+    ;5) Get the two's complement of divisor+2 (3rd Byte)
+    comf	divisor+2, f
+    incf	divisor+2, f
+    ;6) add two's complement of divisor+2 to temp3byte+2 (3rd Bytes)
+    movfw	divisor+2
+    addwf	temp3byte+2, f
+    ;7) Restore divisor
+    clrf	divisor+2
+    bsf		divisor+2, 7
+    clrf	divisor+1
+    clrf	divisor
+    btfsc	temp3byte+2, 7	    ;msb of temp3byte=1 (neg number?)
+    goto	negative
+    bsf		quotient, 0	    ;no so set lsb of quotient
+    goto	decrementDiv
+negative
+    bcf		quotient, 0	    ;yes so clear lsb of quotient
+    ;and add divisor to temp3byte and leave result in temp3byte
+    movfw	divisor
+    addwf	temp3byte, f	    ;add 1st byte
+    
+    movfw	divisor+1
+    btfsc	STATUS, C	    ;carry from addition of 1st byte?
+    incfsz	divisor+1, w	    ;yes so increment 2nd byte
+    addwf	temp3byte+1, f	    ;add 2nd byte
+    
+    movfw	divisor+2
+    btfsc	STATUS, C	    ;carry from addition of 2nd byte?
+    incfsz	divisor+2, w	    ;yes so increment 3rd byte
+    addwf	temp3byte+2, f	    ;add 3rd byte
+decrementDiv
+    decfsz	loopCount, f
+    goto	beginDiv	    ;reloop 48 times 
+    
+    retlw	0
+    
+;****************************Get Temperature Data*******************************
 getTemp
     banksel	sixByteNum
     clrf	sixByteNum+5
@@ -241,6 +365,37 @@ getTemp
     movfw	dtMulProduct+3
     banksel	PORTD
     movwf	PORTD
+    
+    ;Divide dtMulProduct by 2^23 (2^23 = 8388608 = b'10000000 00000000 00000000')
+    ;) Clear out 3 byte temp register
+    banksel	temp3byte
+    clrf	temp3byte
+    clrf	temp3byte+1
+    clrf	temp3byte+2
+    ; 2) Place dtMulProduct (6 bytes) into quotient (initially, but will be 
+    ;    shifted during routine)
+    movfw	dtMulProduct
+    movwf	quotient
+    movfw	dtMulProduct+1
+    movwf	quotient+1
+    movfw	dtMulProduct+2
+    movwf	quotient+2
+    movfw	dtMulProduct+3
+    movwf	quotient+3
+    movfw	dtMulProduct+4
+    movwf	quotient+4
+    movfw	dtMulProduct+5
+    movwf	dtMulProduct+5
+    ; 3) Place 2^23 into "divisor"
+    banksel	divisor
+    clrf	divisor+2
+    bsf		divisor+2, 7
+    clrf	divisor+1
+    clrf	divisor
+    ; 4) Loop through for 48 times (number of bits in divident/dtMulProduct = 48)
+    movlw	.48
+    movwf	loopCount
+    call	tempDiv
     
 wer
     
