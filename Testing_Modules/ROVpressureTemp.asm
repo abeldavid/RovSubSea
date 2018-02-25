@@ -19,19 +19,12 @@
     #define deviceReset	     (d'30')
     
     global	delayMillis
-    global	Tref	;C5
-    global	TEMPSENS
-    global	D2
-    global	sixByteNum
     global	deeT
+    global	product32
+    global	mpcand32
+    global	Tref
     global	loopCount
-    global	product16
-    global	mCand16
-    global	TEMPSENS
-    global	dtMulProduct
-    global	temp3byte
-    global	quotient
-    global	divisor
+    global	D2
     
     extern	displayHeaders
     extern	LCDInit
@@ -67,25 +60,12 @@ coeffCPY	    RES	    2	;shadow register for copying PROM coefficients
 adcCPY		    RES	    3	;shadow register for copying temp/press ADC values
 tOrP		    RES	    1	;flag used to determine whether we read temp
 							;or pressure data (0=pressure, 1=temperature)
-sixByteNum	    RES	    6
-deeT		    RES	    4   ;dT=signed 32 bit int
-loopCount	    RES	    1   ;counter for multiplication loops
-	    
-product16	    RES	    4	;Holds both 16bit multiplier (lower 2 bytes)
-				;and product for 16x16 multiplication routine.
-				;lsb of product16= lsb of multiplier = control for 
-				;multiplication routine
-				
-dtMulProduct	    RES	    6	;Holds both 16bit multiplier (lower 2 bytes)
-				;and product for dtMul routine
-				;lsb of dtMulProduct = lsb of multiplier = control
-				;for multiplication routine
-	    
-mCand16		    RES	    2	;16 bit multiplicand for 16x16 	multiplication routine	
-temp3byte	    RES	    3	;temp register used in division routine 
-quotient	    RES	    6	;quotient for division routine (initially = to dtMulProduct)
-divisor		    RES	    3	;divisor for division routine
-
+;Math variables
+loopCount	    RES	    1	;counter for loops
+deeT		    RES	    4	;32 bit signed int
+product32	    RES	    8	;64 bit 
+mpcand32	    RES	    4	;32 bit multiplicand for multiplication routine.	   
+	
 ;**********************************************************************
     ORG		0x000	
     pagesel		start	; processor reset vector
