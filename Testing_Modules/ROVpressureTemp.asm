@@ -25,6 +25,7 @@
     global	Tref
     global	loopCount
     global	D2
+    global	negFlag
     
     extern	displayHeaders
     extern	LCDInit
@@ -64,7 +65,8 @@ tOrP		    RES	    1	;flag used to determine whether we read temp
 loopCount	    RES	    1	;counter for loops
 deeT		    RES	    4	;32 bit signed int
 product32	    RES	    8	;64 bit 
-mpcand32	    RES	    4	;32 bit multiplicand for multiplication routine.	   
+mpcand32	    RES	    4	;32 bit multiplicand for multiplication routine.	
+negFlag		    RES	    1	;bit 0 of this is set is operation results in neg number
 	
 ;**********************************************************************
     ORG		0x000	

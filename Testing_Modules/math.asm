@@ -17,6 +17,7 @@
     extern  Tref	;16 bit
     extern  loopCount	;8 bit
     extern  D2		;24 bit
+    extern  negFlag	;bit 0 of this is set if operation results in neg number
     
 .math code
 mul32
@@ -99,6 +100,8 @@ mulShift
     
 ;****************************Get Temperature Data*******************************
 getTemp
+    banksel	negFlag
+    clrf	negFlag		;clear negative number indicator
 ;1) get value of dt (dt = D2 - Tref * 2^8)
     ; 1st place Tref into lower 4 bytes of product32
     banksel	Tref
@@ -120,7 +123,7 @@ getTemp
     movwf	loopCount
     call	mul32	    ;result of Tref * 256 is in lower 4 bytes of product32
     
-    ; 4th, subtract product32 (4 bytes) from D2 (3 bytes)
+    ; 4th, perform subtraction of product32 (3 bytes) from D2 (3 bytes and is placed in deeT)
     ;	    1st place D2 in dT
     banksel	D2
     movfw	D2
@@ -130,24 +133,63 @@ getTemp
     movfw	D2+2
     movwf	deeT+2
     clrf	deeT+3
-
-   movfw	product32
-   subwf	deeT, f
+    ;TEST FOR A NEGATIVE DT
+    ;banksel	deeT
+    ;movlw	.64
+    ;movwf	deeT
+    ;movlw	.75
+    ;movwf	deeT+1
+    ;movlw	.76
+    ;movwf	deeT+2
+    ;check to see which # is greater, D2/deeT or product32, (neither is larger than a 3 byte number
+    ;so test the MSB 1st)
+    movfw	product32+2
+    subwf	deeT+2, w
+    btfsc	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
+    goto	postiveDt	;No so dT will be positive. (Proceed to subtract product32 from D2/deeT)
+    bsf		negFlag, 0	;yes so indicate resulting value for dT will be a negative number
+				;and subtract D2 from product32
+negativeDt
+    ;subtract deeT/D2 from product32 to get a negative deeT
+    movfw	deeT
+    subwf	product32, f	;Subtract 1st bytes
+    
+    movfw	deeT+1
+    btfss	STATUS, C	;borrow from subtraction of 1st bytes?
+    incfsz	deeT+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	product32+1, f	;Subtract 2nd bytes
+    
+    movfw	deeT+2
+    btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
+    incfsz	deeT+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	product32+2, f	;Subtract 3rd bytes. No more bytes left in product32 (its a 24 bit number here)
+    ;Value for dt is negative but it currently is in product32 so place product32 into deeT
+    movfw	product32
+    movwf	deeT
+    movfw	product32+1
+    movwf	deeT+1
+    movfw	product32+2
+    movwf	deeT+2
+				
+    goto	doneSubtracting	;finished subtracting D2 from product32
+postiveDt
+    movfw	product32
+    subwf	deeT, f		;Subtract 1st bytes
+    
+    movfw	product32+1
+    btfss	STATUS, C	;borrow from subtraction of 1st bytes?
+    incfsz	product32+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	deeT+1, f	;Subtract 2nd bytes
    
-   movfw	product32+1
-   btfss	STATUS, C	;borrow from subctraction?
-   incfsz	product32+1, w	;yes so increment next byte to be subtracted (Don't subtract if zero resulted from incrementing)
-   subwf	deeT+1, f
-   
-   movfw	product32+2
-   btfss	STATUS, C	;borrow from subctraction?
-   incfsz	product32+2, w	;yes so increment next byte to be subtracted (Don't subtract if zero resulted from incrementing)
-   subwf	deeT+2, f
-   
-   movfw	product32+3
-   btfss	STATUS, C	;borrow from subctraction?
-   incfsz	product32+3, w	;yes so increment next byte to be subtracted (Don't subtract if zero resulted from incrementing)
-   subwf	deeT+3, f
+    movfw	product32+2
+    btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
+    incfsz	product32+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	deeT+2, f	;Subtract 3rd bytes. No more bytes left in D2 (its a 24 bit number)
+doneSubtracting
+    ;We now have a signed value for dT
+    ;Multiply this by C6/2^23 and add/subtract it to/from 2000
+    ;When multiplying dT*C6 only use the lower 4 bytes when you divide by 2^23
+    ;then add/subtract this number to/from 2000
     
 wer
     
