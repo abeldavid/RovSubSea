@@ -219,7 +219,7 @@ doneSubtracting
     movlw	.32
     movwf	loopCount
     call	mul32	    ;result of dT * TEMPSENS/C6 is in lower 4 bytes of product32
-	;Divide lower 4 bytes of product32 by 2^23 (8388608)
+	; Divide lower 4 bytes of product32 by 2^23 (8388608)
 wer
     
     goto	wer
