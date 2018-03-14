@@ -11,13 +11,14 @@
     
     global  getTemp
 	
-    extern  deeT	;32 bit signed
+    extern  deeT		;32 bit signed
     extern  product32	;64 bit
     extern  mpcand32	;32 bit
-    extern  Tref	;16 bit
+    extern  Tref		;16 bit
     extern  loopCount	;8 bit
-    extern  D2		;24 bit
-    extern  negFlag	;bit 0 of this is set if operation results in neg number
+    extern  D2			;24 bit
+    extern  negFlag		;bit 0 of this is set if operation results in neg number
+	extern	TEMPSENS	;C6
     
 .math code
 mul32
@@ -186,11 +187,39 @@ postiveDt
     incfsz	product32+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
     subwf	deeT+2, f	;Subtract 3rd bytes. No more bytes left in D2 (its a 24 bit number)
 doneSubtracting
-    ;We now have a signed value for dT
+    ;We now have a signed value for dT (if negFlag, 0 = 1 then negative)
     ;Multiply this by C6/2^23 and add/subtract it to/from 2000
     ;When multiplying dT*C6 only use the lower 4 bytes when you divide by 2^23
     ;then add/subtract this number to/from 2000
     
+	;Multiply deeT by C6
+	;Place dT into lower 4 bytes of product21
+	banksel	deeT
+	movfw	deeT
+	movwf	product32	;byte 0
+	movfw	deeT+1
+	movwf	product32+1	;byte 1
+	movfw	deeT+2
+	movwf	product32+2	;byte 3
+	movfw	deeT+3
+	movwf	product32+3	;byte 4
+	;zero out upper 4 byte of product32
+	clrf	product32+4	;byte 5
+	clrf	product32+5	;byte 6
+	clrf	product32+6	;byte 7
+	clrf	product32+7	;byte 8
+	;Place C6/TEMPSENS into mpcand32
+	movfw	TEMPSENS
+	movwf	mpcand32	;byte 1
+	movfw	TEMPSENS+1	
+	movwf	mpcand32+1	;byte 2
+	clrf	mpcand32+2	;clear out upper 2 bytes of
+	clrf	mpcand32+3	;mpcand32 (TEMPSENS is a 16 bit number)
+	; Multiply dT by C6/TEMPSENS
+    movlw	.32
+    movwf	loopCount
+    call	mul32	    ;result of dT * TEMPSENS/C6 is in lower 4 bytes of product32
+	;Divide lower 4 bytes of product32 by 2^23 (8388608)
 wer
     
     goto	wer
