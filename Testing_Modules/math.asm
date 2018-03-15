@@ -19,10 +19,13 @@
     extern  D2			;24 bit
     extern  negFlag		;bit 0 of this is set if operation results in neg number
 	extern	TEMPSENS	;C6
+	extern	A			;5 bytes
+	extern	M			;4 bytes
+	extern	Q			;4 bytes
     
 .math code
 mul32
-;******************Multiply 2 unsigned 32 bit numbers***************************
+;**********************Multiply 2 32 bit numbers********************************
 ;At beginning of routine,  product32 contains following:
 ;[-----upper 4 bytes------][-------lower 4 bytes----------]
 ;[---------zero-----------][------32 bit multiplier-------]
@@ -98,7 +101,102 @@ mulShift
 
     retlw	0
 ;************************End mul32 routine**************************************
+	
+;**********************Divide 2 32 bit numbers**********************************
+div32
+; At beginning of routine:
+;	A = 0
+;	loopCount = 32
+;	M = divisor
+;	Q = dividend, but holds quotient at end of routine
+divShift
+	; left shift A and Q together (Q gets shifted into A)
+	rlf		A+3,f		;left shift A (byte 4)
+	btfsc	A+2, 7		;msb of 3rd byte of A = 1?
+	bsf		A+3, 0		;yes so shift it into 4th byte of A
+	
+	rlf		A+2,f		;left shift A (byte 3)
+	btfsc	A+1, 7		;msb of 2nd byte of A = 1?
+	bsf		A+2, 0		;yes so shift it into 3rd byte of A
+	
+	rlf		A+1,f		;left shift A (byte 2)
+	btfsc	A, 7		;msb of 1st byte of A = 1?
+	bsf		A+1, 0		;yes so shift it into 2nd byte of A
+	
+	rlf		A,f		    ;left shift A (byte 1)
+	btfsc	Q+3, 7		;msb of 4th byte of Q = 1?
+	bsf		A, 0		;yes so shift it into 1st byte of A
+	
+	rlf		Q+3, f		;left shift Q (byte 4)
+	btfsc	Q+2, 7			;msb of 3rd byte of Q = 1?
+	bsf		Q+3, 0		;yes so shift it into 4th byte of Q
+	
+	rlf		Q+2, f		;left shift Q (byte 3)
+	btfsc	Q+1, 7		;msb of 2nd byte of Q = 1?
+	bsf		Q+2, 0		;yes so shift it into 3rd byte of Q
+	
+	rlf		Q+1, f		;left shift Q (byte 2)
+	btfsc	Q, 7		;msb of 1st byte of Q = 1?
+	bsf		Q+1, 0		;yes so shift it into 2nd byte of Q
+	
+	rlf		Q, f		;left shift Q (byte 1)
+		
+	; A = A - M
+	clrf	negFlag
+	movfw	M
+    subwf	A, f	    ;Subtract 1st bytes
     
+    movfw	M+1
+    btfss	STATUS, C	;borrow from subtraction of 1st bytes?
+    incfsz	M+1, w	    ;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	A+1, f	    ;Subtract 2nd bytes
+	
+	movfw	M+2
+    btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
+    incfsz	M+2, w	    ;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	A+2, f	    ;Subtract 3rd bytes
+	
+	movfw	M+3
+    btfss	STATUS, C	;borrow from subtraction of 3rd bytes?
+    incfsz	M+3, w	    ;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	A+3, f	    ;Subtract 4th bytes
+	
+	;negFlag takes the place of msb of A (if msb of A = 1 then neg result from subtraction)
+	;btfsc	A+4, 0		;Does msb of A = 1?
+	btfss	STATUS, C	;borrow from subtraction of 4th bytes?
+	goto	resto		;yes so restore A
+	
+	bsf		Q, 0		;no so set lsb of Q
+	decfsz	loopCount, f	;Decrement loop counter
+	goto	divShift	;Reloop
+	goto	divComplete	;Done so exit routine
+;******************PROBLEM HERE, ROUTINE NEVER ENTERS "RESTO"*******************
+resto
+	bcf		Q, 0		;clear lsb of Q
+	;restore A (A = A + M)
+	movfw	M
+	addwf	A, f		;Add 1st bytes
+	
+	movfw	M+1
+	btfsc	STATUS, C	;Carry from addition of 1st bytes?
+	incfsz	M+1, w		;Yes so increment 2nd byte to be added (unless incrementation resulted in a zero value)
+	addwf	A+1, f		;Add 2nd bytes
+	
+	movfw	M+2
+	btfsc	STATUS, C	;Carry from addition of 2nd bytes?
+	incfsz	M+2, w		;Yes so increment 3rd byte to be added (unless incrementation resulted in a zero value)
+	addwf	A+2, f		;Add 3rd bytes
+	
+	movfw	M+3
+	btfsc	STATUS, C	;Carry from addition of 3rd bytes?
+	incfsz	M+3, w		;Yes so increment 4th byte to be added (unless incrementation resulted in a zero value)
+	addwf	A+3, f		;Add 4th bytes
+	
+	decfsz	loopCount, f	;Decrement loop counter
+	goto	divShift	;Reloop
+	
+divComplete
+	retlw	0
 ;****************************Get Temperature Data*******************************
 getTemp
     banksel	negFlag
@@ -220,6 +318,33 @@ doneSubtracting
     movwf	loopCount
     call	mul32	    ;result of dT * TEMPSENS/C6 is in lower 4 bytes of product32
 	; Divide lower 4 bytes of product32 by 2^23 (8388608)
+	; Zero out A
+	banksel	A
+	clrf	A+1
+	clrf	A+2
+	clrf	A+3
+	clrf	A+4
+	; Place d'8388608' into divisor/M
+	clrf	M
+	clrf	M+1
+	movlw	.128
+	movwf	M+2
+	clrf	M+3
+	; Place lower 4 bytes of product32 into Q (Q is initially the dividend but holds
+	; the quotient at the end of div routine
+	movfw	product32	
+	movwf	Q
+	movfw	product32+1
+	movwf	Q+1
+	movfw	product32+2
+	movwf	Q+2
+	movfw	product32+3
+	movwf	Q+3
+	;loop though 32 times (32 bit division)
+	movlw	.32
+	movwf	loopCount
+	call	div32	;PROBLEM HERE, AFTER A = A-M, ROUTINE NEVER ENTERS "RESTO" SECTION
+	
 wer
     
     goto	wer
