@@ -22,6 +22,7 @@
 	extern	A			;5 bytes
 	extern	M			;4 bytes
 	extern	Q			;4 bytes
+	extern	Temp		;Final value for temperature (4 bytes, signed)
     
 .math code
 mul32
@@ -111,34 +112,42 @@ div32
 ;	Q = dividend, but holds quotient at end of routine
 divShift
 	; left shift A and Q together (Q gets shifted into A)
+	bcf	    STATUS, C	;Clear carry
 	rlf		A+3,f		;left shift A (byte 4)
 	btfsc	A+2, 7		;msb of 3rd byte of A = 1?
 	bsf		A+3, 0		;yes so shift it into 4th byte of A
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		A+2,f		;left shift A (byte 3)
 	btfsc	A+1, 7		;msb of 2nd byte of A = 1?
 	bsf		A+2, 0		;yes so shift it into 3rd byte of A
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		A+1,f		;left shift A (byte 2)
 	btfsc	A, 7		;msb of 1st byte of A = 1?
 	bsf		A+1, 0		;yes so shift it into 2nd byte of A
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		A,f		    ;left shift A (byte 1)
 	btfsc	Q+3, 7		;msb of 4th byte of Q = 1?
 	bsf		A, 0		;yes so shift it into 1st byte of A
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		Q+3, f		;left shift Q (byte 4)
 	btfsc	Q+2, 7			;msb of 3rd byte of Q = 1?
 	bsf		Q+3, 0		;yes so shift it into 4th byte of Q
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		Q+2, f		;left shift Q (byte 3)
 	btfsc	Q+1, 7		;msb of 2nd byte of Q = 1?
 	bsf		Q+2, 0		;yes so shift it into 3rd byte of Q
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		Q+1, f		;left shift Q (byte 2)
 	btfsc	Q, 7		;msb of 1st byte of Q = 1?
 	bsf		Q+1, 0		;yes so shift it into 2nd byte of Q
 	
+	bcf	    STATUS, C	;Clear carry
 	rlf		Q, f		;left shift Q (byte 1)
 		
 	; A = A - M
@@ -161,8 +170,6 @@ divShift
     incfsz	M+3, w	    ;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
     subwf	A+3, f	    ;Subtract 4th bytes
 	
-	;negFlag takes the place of msb of A (if msb of A = 1 then neg result from subtraction)
-	;btfsc	A+4, 0		;Does msb of A = 1?
 	btfss	STATUS, C	;borrow from subtraction of 4th bytes?
 	goto	resto		;yes so restore A
 	
@@ -170,7 +177,6 @@ divShift
 	decfsz	loopCount, f	;Decrement loop counter
 	goto	divShift	;Reloop
 	goto	divComplete	;Done so exit routine
-;******************PROBLEM HERE, ROUTINE NEVER ENTERS "RESTO"*******************
 resto
 	bcf		Q, 0		;clear lsb of Q
 	;restore A (A = A + M)
@@ -242,6 +248,7 @@ getTemp
     ;movwf	deeT+2
     ;check to see which # is greater, D2/deeT or product32, (neither is larger than a 3 byte number
     ;so test the MSB 1st)
+;*************STILL NEED TO CHECK OTHER BYTES TO DETERMINE IF NEGATIVE**********
     movfw	product32+2
     subwf	deeT+2, w
     btfsc	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
@@ -320,10 +327,10 @@ doneSubtracting
 	; Divide lower 4 bytes of product32 by 2^23 (8388608)
 	; Zero out A
 	banksel	A
+	clrf	A
 	clrf	A+1
 	clrf	A+2
 	clrf	A+3
-	clrf	A+4
 	; Place d'8388608' into divisor/M
 	clrf	M
 	clrf	M+1
@@ -343,7 +350,136 @@ doneSubtracting
 	;loop though 32 times (32 bit division)
 	movlw	.32
 	movwf	loopCount
-	call	div32	;PROBLEM HERE, AFTER A = A-M, ROUTINE NEVER ENTERS "RESTO" SECTION
+	call	div32	;division result is held in Q
+	;Add/subtract Q to/from 2000 depending on status of negflag
+	; First place d'2000' into Temp
+	banksel	Temp
+	movlw	.208
+	movwf	Temp
+	movlw	.7
+	movwf	Temp+1
+	clrf	Temp+2
+	clrf	Temp+3
+	;check negflag to see if we need to add or subtract Q from 2000/Temp
+	btfsc	negFlag, 0
+	goto	tempSubtract	;negFlag is set so subtract Q from 2000/Temp
+	;negFlag is not set so add Q to 2000/Temp
+	movfw	Q
+	addwf	Temp, f		;Add 1st bytes
+	
+	movfw	Q+1
+	btfsc	STATUS, C	;Carry from addition of 1st bytes?
+	incfsz	Q+1, w		;yes so increment 2nd byte to be added (unless inc results in zero)
+	addwf	Temp+1, f	;Add 2nd bytes
+	
+	movfw	Q+2
+	btfsc	STATUS, C	;Carry from addition of 2nd bytes?
+	incfsz	Q+2, w		;yes so increment 3rd byte to be added (unless inc results in zero)
+	addwf	Temp+2, f	;Add 3rd bytes
+	
+	movfw	Q+3
+	btfsc	STATUS, C	;Carry from addition of 3rd bytes?
+	incfsz	Q+3, w		;yes so increment 4th byte to be added (unless inc results in zero)
+	addwf	Temp+3, f	;Add 4th bytes
+	goto	divBy100
+	;negFlag is set (due to dT being negative) so subtract Q from 2000/Temp
+;*********CHECK TEMPSUBTRACT POSTEMP AND NEGTEMP WITH DEBUGGER**************************
+tempSubtract
+	clrf	negFlag		;Reset negFlag (will need this if temp is found to be negative)
+	;determine which is greater, Q or 2000
+	movfw	Q+3
+	subwf	Temp+3, w	;4th bytes
+	btfss	STATUS, C	;neg result if C=0
+	goto	negTemp		;Temperature will be negative
+	
+	movfw	Q+2
+	subwf	Temp+2, w	;3rd bytes
+	btfss	STATUS, C	;neg result if C=0
+	goto	negTemp		;Temperature will be negative
+	
+	movfw	Q+1
+	subwf	Temp+1, w	;2nd bytes
+	btfss	STATUS, C	;neg result if C=0
+	goto	negTemp		;Temperature will be negative
+	
+	movfw	Q
+	subwf	Temp, w	    ;1st bytes
+	btfss	STATUS, C	;neg result if C=0
+	goto	negTemp		;Temperature will be negative
+;Temperature will be a positive result so subtract Q from 2000/Temp
+posTemp	
+	movfw	Q
+	subwf	Temp, f		;Subtract 1st bytes
+	
+	movfw	Q+1
+	btfss	STATUS, C	;Borrow from subtraction of 1st bytes?
+	incfsz	Q+1, w		;Yes so inc 2nd byte to be subtracted (unless inc results in zero)
+	subwf	Temp+1, f	;Subtract 2nd bytes
+	
+	movfw	Q+2
+	btfss	STATUS, C	;Borrow from subtraction of 2nd bytes?
+	incfsz	Q+2, w		;Yes so inc 3rd byte to be subtracted (unless inc results in zero)
+	subwf	Temp+2, f	;Subtract 3rd bytes
+	
+	movfw	Q+3
+	btfss	STATUS, C	;Borrow from subtraction of 3rd bytes?
+	incfsz	Q+3, w		;Yes so inc 4th byte to be subtracted (unless inc results in zero)
+	subwf	Temp+3, f	;Subtract 4th bytes
+	goto	divBy100
+	
+;Temperature will be a negative result so subtract 2000/Temp from Q (and set negFlag)
+negTemp
+	bsf		negFlag, 0	;Set negFlag to indicate a negative temperature
+	
+	movfw	Temp
+	subwf	Q, f		;Subtract 1st bytes
+	
+	movfw	Temp+1
+	btfss	STATUS, C	;Borrow from subtraction of 1st bytes?
+	incfsz	Temp+1, w	;Yes so inc 2nd byte to be subtracted (unless inc results in zero)
+	subwf	Q+1, f		;Subtract 2nd bytes
+	
+	movfw	Temp+2
+	btfss	STATUS, C	;Borrow from subtraction of 2nd bytes?
+	incfsz	Temp+2, w	;Yes so inc 3rd byte to be subtracted (unless inc results in zero)
+	subwf	Q+2, f		;Subtract 3rd bytes
+	
+	movfw	Temp+3
+	btfss	STATUS, C	;Borrow from subtraction of 3rd bytes?
+	incfsz	Temp+3, w	;Yes so inc 4th byte to be subtracted (unless inc results in zero)
+	subwf	Q+3, f		;Subtract 4th bytes
+	;Divide result by 100 to get Temperature in Celsius
+divBy100
+	; Zero out A
+	banksel	A
+	clrf	A
+	clrf	A+1
+	clrf	A+2
+	clrf	A+3
+	clrf	A+4
+	; Place d'100' into divisor/M
+	movlw	.100
+	movwf	M
+	clrf	M+1
+	clrf	M+2
+	clrf	M+3
+	; Place Temp into Q (Q is initially the dividend but holds the quotient at 
+	; the end of div routine
+	movfw	Temp	
+	movwf	Q
+	movfw	Temp+1
+	movwf	Q+1
+	movfw	Temp+2
+	movwf	Q+2
+	movfw	Temp+3
+	movwf	Q+3
+	;loop though 32 times (32 bit division)
+	movlw	.32
+	movwf	loopCount
+	call	div32	;division result is held in Q 
+	;Place div result held in Q into Temp
+	
+;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
 	
 wer
     
@@ -360,3 +496,34 @@ wer
     END
 
 
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

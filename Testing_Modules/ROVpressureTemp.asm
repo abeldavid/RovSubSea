@@ -30,6 +30,7 @@
 	global	A	
 	global	M
 	global	Q
+	global	Temp	
     
     extern	displayHeaders
     extern	LCDInit
@@ -72,9 +73,10 @@ product32	    RES	    8	;64 bit
 mpcand32	    RES	    4	;32 bit multiplicand for multiplication routine.	
 negFlag		    RES	    1	;bit 0 of this is set is operation results in neg number
 ;32 bit div variables
-A				RES		5	;33 bit number
+A				RES		4	;32 number
 M				RES		4	;divisor
 Q				RES		4	;dividend/quotient
+Temp			RES		4	;Final value for temperature reading (signed value)
 	
 ;**********************************************************************
     ORG		0x000	
