@@ -22,7 +22,11 @@
 	extern	A			;5 bytes
 	extern	M			;4 bytes
 	extern	Q			;4 bytes
-	extern	Temp		;Final value for temperature (4 bytes, signed)
+	extern	TempC		;Final value for temperature (Celsius) (4 bytes, signed)
+						;LSB of TempC holds value to be displayed
+	extern	TempF		;Final value for temperature (Farenheit)
+	extern	negFaren	;Flag used to indicate a negative temp in Farenheit
+						;if bit 0 = 1 then negative
     
 .math code
 mul32
@@ -248,14 +252,24 @@ getTemp
     ;movwf	deeT+2
     ;check to see which # is greater, D2/deeT or product32, (neither is larger than a 3 byte number
     ;so test the MSB 1st)
-;*************STILL NEED TO CHECK OTHER BYTES TO DETERMINE IF NEGATIVE**********
-    movfw	product32+2
+    movfw	product32+2	;Check 3rd bytes
     subwf	deeT+2, w
+    btfss	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
+	goto	negativeDt	;Yes so obtain a negative dT value
+	
+	movfw	product32+1	;Check 2nd bytes
+    subwf	deeT+1, w
+    btfss	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
+	goto	negativeDt	;Yes so obtain a negative dT value
+	
+	movfw	product32	;Check 1st bytes
+    subwf	deeT, w
     btfsc	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
     goto	postiveDt	;No so dT will be positive. (Proceed to subtract product32 from D2/deeT)
-    bsf		negFlag, 0	;yes so indicate resulting value for dT will be a negative number
-				;and subtract D2 from product32
+    	
+						
 negativeDt
+	bsf		negFlag, 0		;Set negFlag to indicate a negative value for dT
     ;subtract deeT/D2 from product32 to get a negative deeT
     movfw	deeT
     subwf	product32, f	;Subtract 1st bytes
@@ -298,7 +312,7 @@ doneSubtracting
     ;then add/subtract this number to/from 2000
     
 	;Multiply deeT by C6
-	;Place dT into lower 4 bytes of product21
+	;Place dT into lower 4 bytes of product32
 	banksel	deeT
 	movfw	deeT
 	movwf	product32	;byte 0
@@ -352,101 +366,101 @@ doneSubtracting
 	movwf	loopCount
 	call	div32	;division result is held in Q
 	;Add/subtract Q to/from 2000 depending on status of negflag
-	; First place d'2000' into Temp
-	banksel	Temp
+	; First place d'2000' into TempC
+	banksel	TempC
 	movlw	.208
-	movwf	Temp
+	movwf	TempC
 	movlw	.7
-	movwf	Temp+1
-	clrf	Temp+2
-	clrf	Temp+3
+	movwf	TempC+1
+	clrf	TempC+2
+	clrf	TempC+3
 	;check negflag to see if we need to add or subtract Q from 2000/Temp
 	btfsc	negFlag, 0
 	goto	tempSubtract	;negFlag is set so subtract Q from 2000/Temp
 	;negFlag is not set so add Q to 2000/Temp
 	movfw	Q
-	addwf	Temp, f		;Add 1st bytes
+	addwf	TempC, f		;Add 1st bytes
 	
 	movfw	Q+1
 	btfsc	STATUS, C	;Carry from addition of 1st bytes?
 	incfsz	Q+1, w		;yes so increment 2nd byte to be added (unless inc results in zero)
-	addwf	Temp+1, f	;Add 2nd bytes
+	addwf	TempC+1, f	;Add 2nd bytes
 	
 	movfw	Q+2
 	btfsc	STATUS, C	;Carry from addition of 2nd bytes?
 	incfsz	Q+2, w		;yes so increment 3rd byte to be added (unless inc results in zero)
-	addwf	Temp+2, f	;Add 3rd bytes
+	addwf	TempC+2, f	;Add 3rd bytes
 	
 	movfw	Q+3
 	btfsc	STATUS, C	;Carry from addition of 3rd bytes?
 	incfsz	Q+3, w		;yes so increment 4th byte to be added (unless inc results in zero)
-	addwf	Temp+3, f	;Add 4th bytes
+	addwf	TempC+3, f	;Add 4th bytes
 	goto	divBy100
 	;negFlag is set (due to dT being negative) so subtract Q from 2000/Temp
-;*********CHECK TEMPSUBTRACT POSTEMP AND NEGTEMP WITH DEBUGGER**************************
+;*********CHECK TEMPSUBTRACT PosTEMP AND NEGTEMP WITH DEBUGGER**************************
 tempSubtract
 	clrf	negFlag		;Reset negFlag (will need this if temp is found to be negative)
 	;determine which is greater, Q or 2000
 	movfw	Q+3
-	subwf	Temp+3, w	;4th bytes
+	subwf	TempC+3, w	;4th bytes
 	btfss	STATUS, C	;neg result if C=0
 	goto	negTemp		;Temperature will be negative
 	
 	movfw	Q+2
-	subwf	Temp+2, w	;3rd bytes
+	subwf	TempC+2, w	;3rd bytes
 	btfss	STATUS, C	;neg result if C=0
 	goto	negTemp		;Temperature will be negative
 	
 	movfw	Q+1
-	subwf	Temp+1, w	;2nd bytes
+	subwf	TempC+1, w	;2nd bytes
 	btfss	STATUS, C	;neg result if C=0
 	goto	negTemp		;Temperature will be negative
 	
 	movfw	Q
-	subwf	Temp, w	    ;1st bytes
+	subwf	TempC, w	    ;1st bytes
 	btfss	STATUS, C	;neg result if C=0
 	goto	negTemp		;Temperature will be negative
 ;Temperature will be a positive result so subtract Q from 2000/Temp
 posTemp	
 	movfw	Q
-	subwf	Temp, f		;Subtract 1st bytes
+	subwf	TempC, f		;Subtract 1st bytes
 	
 	movfw	Q+1
 	btfss	STATUS, C	;Borrow from subtraction of 1st bytes?
 	incfsz	Q+1, w		;Yes so inc 2nd byte to be subtracted (unless inc results in zero)
-	subwf	Temp+1, f	;Subtract 2nd bytes
+	subwf	TempC+1, f	;Subtract 2nd bytes
 	
 	movfw	Q+2
 	btfss	STATUS, C	;Borrow from subtraction of 2nd bytes?
 	incfsz	Q+2, w		;Yes so inc 3rd byte to be subtracted (unless inc results in zero)
-	subwf	Temp+2, f	;Subtract 3rd bytes
+	subwf	TempC+2, f	;Subtract 3rd bytes
 	
 	movfw	Q+3
 	btfss	STATUS, C	;Borrow from subtraction of 3rd bytes?
 	incfsz	Q+3, w		;Yes so inc 4th byte to be subtracted (unless inc results in zero)
-	subwf	Temp+3, f	;Subtract 4th bytes
+	subwf	TempC+3, f	;Subtract 4th bytes
 	goto	divBy100
 	
 ;Temperature will be a negative result so subtract 2000/Temp from Q (and set negFlag)
 negTemp
 	bsf		negFlag, 0	;Set negFlag to indicate a negative temperature
 	
-	movfw	Temp
+	movfw	TempC
 	subwf	Q, f		;Subtract 1st bytes
 	
-	movfw	Temp+1
+	movfw	TempC+1
 	btfss	STATUS, C	;Borrow from subtraction of 1st bytes?
-	incfsz	Temp+1, w	;Yes so inc 2nd byte to be subtracted (unless inc results in zero)
+	incfsz	TempC+1, w	;Yes so inc 2nd byte to be subtracted (unless inc results in zero)
 	subwf	Q+1, f		;Subtract 2nd bytes
 	
-	movfw	Temp+2
+	movfw	TempC+2
 	btfss	STATUS, C	;Borrow from subtraction of 2nd bytes?
-	incfsz	Temp+2, w	;Yes so inc 3rd byte to be subtracted (unless inc results in zero)
+	incfsz	TempC+2, w	;Yes so inc 3rd byte to be subtracted (unless inc results in zero)
 	subwf	Q+2, f		;Subtract 3rd bytes
 	
-	movfw	Temp+3
+	movfw	TempC+3
 	btfss	STATUS, C	;Borrow from subtraction of 3rd bytes?
-	incfsz	Temp+3, w	;Yes so inc 4th byte to be subtracted (unless inc results in zero)
+	incfsz	TempC+3, w	;Yes so inc 4th byte to be subtracted (unless inc results in zero)
 	subwf	Q+3, f		;Subtract 4th bytes
 	;Divide result by 100 to get Temperature in Celsius
 divBy100
@@ -465,24 +479,111 @@ divBy100
 	clrf	M+3
 	; Place Temp into Q (Q is initially the dividend but holds the quotient at 
 	; the end of div routine
-	movfw	Temp	
+	movfw	TempC	
 	movwf	Q
-	movfw	Temp+1
+	movfw	TempC+1
 	movwf	Q+1
-	movfw	Temp+2
+	movfw	TempC+2
 	movwf	Q+2
-	movfw	Temp+3
+	movfw	TempC+3
 	movwf	Q+3
 	;loop though 32 times (32 bit division)
 	movlw	.32
 	movwf	loopCount
 	call	div32	;division result is held in Q 
-	;Place div result held in Q into Temp
-	
+	;Place div result held in Q into TempC (This is Temp in Celsius)
+	movfw	Q
+	movwf	TempC
 ;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
+	;Convert from Celcius to Farenheit (F = (9*C/5) + 32)
+	clrf	negFaren	;Clear negative farenheit flag
+	;Place TempC into lower 4 bytes of product32
+	movfw	TempC		;TempC is only one byte
+	movwf	product32
+	clrf	product32+1
+	clrf	product32+2
+	clrf	product32+3
+	;zero out upper 4 bytes of product32
+	clrf	product32+4
+	clrf	product32+5
+	clrf	product32+6
+	clrf	product32+7
+	;Place d'9' into mpcand32 (4 byte number)
+	movlw	.9
+	movwf	mpcand32
+	clrf	mpcand32+1
+	clrf	mpcand32+2
+	clrf	mpcand32+3
+	movlw	.32
+	movwf	loopCount
+	call	mul32	    ;result of 9 * TempC is in lower 4 bytes of product32
+	;divide LSB of product32 (result of 9 * TempC) by 5
+	; Zero out A
+	banksel	A
+	clrf	A
+	clrf	A+1
+	clrf	A+2
+	clrf	A+3
+	clrf	A+4
+	; Place d'5' into divisor/M
+	movlw	.5
+	movwf	M
+	clrf	M+1
+	clrf	M+2
+	clrf	M+3
+	; Place LSB of product32 into Q (Q is initially the dividend but holds the quotient at 
+	; the end of div routine) Q is a 4 byte number
+	movfw	product32	
+	movwf	Q
+	clrf	Q+1
+	clrf	Q+2
+	clrf	Q+3
+	;loop though 32 times (32 bit division)
+	movlw	.32
+	movwf	loopCount
+	call	div32	;division result is held in Q 
+	;Is above result negative or positive?
+	btfsc	negFlag, 0
+	goto	negC	;Yes because Celsius temp reading was negative, goto negC to handle this
+	;Positve so add 32 to LSB of Q
+	;CONVERT POSITIVE CELSIUS TO POSITIVE FARENHEIT
+	movlw	.32
+	addwf	Q, f	;Result of Farenheit conversion is now in LSB of Q
+	movfw	Q
+	movwf	TempF	;Positive Clesius reading converted to positive Farenheit and
+					;result is in TempF
+	goto	tempDone
+	;CELSIUS READING WAS NEGATIVE (WILL DEG F BE NEG OR POS?)
+negC
+	;Celsius reading was negative so subtract LSB of Q from 32
+	;if LSB of Q > than 32, result will be a negative Farenheit reading
+	movlw	.32
+	subwf	Q, w
+	btfsc	STATUS, C	;C = 0 if neg result
+	goto	posFarenheit
+	;CONVERT NEGATIVE CELSIUS TO NEGATIVE FARENHEIT
+	bsf  	negFaren, 0	;set flag to indicate a neg farenheit reading
+	movfw	Q
+	movwf	TempF		;Place LSB of Q into TempF
+	;subtract 32 from LSB of Q (which is in TempF
+	movlw	.32
+	subwf	TempF, f	;Negative Celsius reading converted to a negative Farenheit and 
+						;result is in TempF
+	goto	tempDone
+	;CONVERT NEGATIVE CELSIUS TO POSITIVE FARENHEIT
+posFarenheit
+	clrf	negFaren  ;clear flag for negative farenheit reading
+	;Farenheit conversion will result in a positive number
+	;subtract LSB of Q from 32
+	movlw	.32
+	movwf	TempF	  ;Place 32 into TempF
+	movwf	Q		  ;Subtract Q from 32
+	subwf	TempF, f  ;Negative Celsius reading converted to positive Farenheit and
+					  ;result is in TempF
 	
+	
+tempDone	
 wer
-    
     goto	wer
     
     

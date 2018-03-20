@@ -30,7 +30,9 @@
 	global	A	
 	global	M
 	global	Q
-	global	Temp	
+	global	TempC	
+	global	TempF
+	global	negFaren
     
     extern	displayHeaders
     extern	LCDInit
@@ -76,7 +78,11 @@ negFlag		    RES	    1	;bit 0 of this is set is operation results in neg number
 A				RES		4	;32 number
 M				RES		4	;divisor
 Q				RES		4	;dividend/quotient
-Temp			RES		4	;Final value for temperature reading (signed value)
+TempC			RES		4	;Final value for temperature (Celsius) reading (signed value)
+							;LSB of TempC holds value to be displayed
+TempF			RES		1	;Final value for temperature (Farenheit) (signed value)
+negFaren		RES		1	;Flag used to indicate a negative temp in Farenheit
+							;if bit 0 = 1 then negative
 	
 ;**********************************************************************
     ORG		0x000	
@@ -563,7 +569,7 @@ slaveReset
     movwf	D1
     
     ;display "Temp:" and "Press:" headers on LCD
-    ;call	displayHeaders
+    call	displayHeaders
     pagesel	getTemp
     call	getTemp
     pagesel$
