@@ -30,7 +30,7 @@ initCounter	RES	1	;counter for initializing ESCs
 ;**************Send PWM signals to thrusters************************************
 ;Once all four UART thruster data packets have been received, send PWM signals
 ;to thrusters
-.stream	    code
+.motor	    code
 processThrusterStream
     ;check directional state of ROV
     movfw	state
@@ -57,7 +57,6 @@ processThrusterStream
     retlw	0
     
 ;*******************Lookup Table to get ANDing values for PORTD ****************
-.lookUp	    code
 stateLookUp
     addwf   PCL, f
     retlw   b'11000011'	    ;0 forward (T1/T2 FWD, T3/T4 REV)
@@ -70,7 +69,6 @@ stateLookUp
     retlw   b'00001111'	    ;7 stop
     
 ;******Initialize ESCs with stoped signal (1500uS) for four seconds*************
-.escInit    code
 ESCinit
     movlw	b'00001111'
     banksel	PORTD
