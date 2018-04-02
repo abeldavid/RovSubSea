@@ -1,7 +1,7 @@
 ;*********************INITILIZE PERIPHERALS*********************************
     
     list	    p=16f1937	   ;list directive to define processor
-    #include    <p16f1937.inc>	   ;processor specific variable definitions
+    #include        <p16f1937.inc> ;processor specific variable definitions
     
     errorlevel -302	;no "register not in bank 0" warnings
     errorlevel -207    ;no label after column one warning

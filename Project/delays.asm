@@ -5,7 +5,6 @@
     global      delayMillis
 	
     errorlevel -302	;no "register not in bank 0" warnings
-    errorlevel -312     ;no  "page or bank selection not needed" messages
     errorlevel -207    ;no label after column one warning
 	
     #define BANK0  (h'000')
