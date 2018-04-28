@@ -50,7 +50,7 @@ processThrusterStream
     movfw	upDownSpeed
     banksel	CCPR3L
     movwf	CCPR3L
-    
+    banksel	readyThrust
     bcf		readyThrust, 1	;clear readyThrustFlag
 
     retlw	0
@@ -84,7 +84,9 @@ ESCinit
     movwf	CCPR3L
 beginInit
     movlw	.250
+    pagesel	delayMillis
     call	delayMillis
+    pagesel$
     banksel	initCounter
     decf	initCounter, f
     movlw	.0
@@ -95,7 +97,9 @@ beginInit
     clrf	PORTD
     movlw	.2
     movwf	transData
+    pagesel	Transmit
     call	Transmit
+    pagesel$
     retlw	0
 
     END

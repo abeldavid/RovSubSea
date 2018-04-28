@@ -15,7 +15,7 @@
 INT_VECTOR:
 .Interupt code	0x004		    ;interrupt vector location
 INTERRUPT:
-
+    banksel	w_copy
     movwf       w_copy           ;save off current W register contents
     movf	STATUS,w         ;move status register into W register
     movwf	status_copy      ;save off contents of STATUS register
@@ -23,6 +23,8 @@ INTERRUPT:
     movwf       pclath_copy
     banksel	PIE1
     bcf		PIE1, RCIE	 ;disable UART receive interrupts
+    banksel	PIE3
+    bcf		PIE3, TMR4IE	;Disable TMR4 interrupts
 	
     ;Determine source of interrupt
     btfsc	INTCON, IOCIF	 ;change on PORTB?
@@ -30,6 +32,16 @@ INTERRUPT:
     banksel	PIR1
     btfsc	PIR1, RCIF	 ;UART receive interrupt?
     goto	UartReceive
+    
+    banksel	PIR3
+    bcf		PIR3, TMR4IF	;Clear TMR interrupt flag
+    banksel	tmr4counter
+    incf	tmr4counter, f	;increment timer4 interrupt counter
+    movlw	.77
+    xorwf	tmr4counter, f	;77 interrupts before reading sensors
+    btfsc	STATUS, Z	;Z=0 if reached 77
+    movlw	.1		;Dummy Instruction for testing
+    
     goto	isrEnd
     ;determine source of PORTB interrupt
 PORTBchange
@@ -98,6 +110,7 @@ checkReverseSpeed
 checkUpDownSpeed
     movfw	receiveData	    ;Place data packet value into forwardSpeed
     movwf	upDownSpeed
+    banksel	readyThrust
     bsf		readyThrust, 1	    ;set readyThrustFlag
     goto	isrEnd
 ;Get the directional "state" of ROV
@@ -113,6 +126,9 @@ stateData
 isrEnd
     banksel	PIE1
     bsf		PIE1, RCIE	;enable UART receive interrupts
+    banksel	PIE3
+    bsf		PIE3, TMR4IE	;Enable TMR4 interrupts
+    banksel	pclath_copy
     movf	pclath_copy,W
     movwf	PCLATH
     movf	status_copy,w   ;retrieve copy of STATUS register

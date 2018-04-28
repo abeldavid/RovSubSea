@@ -3,6 +3,7 @@
     #include	<p16f1937.inc>		; processor specific variable definitions
     
     global      delayMillis
+    extern	userMillis
 	
     errorlevel -302	;no "register not in bank 0" warnings
     errorlevel -207    ;no label after column one warning
@@ -11,13 +12,10 @@
     #define BANK1  (h'080')
     #define BANK2  (h'100')
     #define BANK3  (h'180')
-    
-;Variables accessible in all banks:
-MULTIBANK	UDATA_SHR
-userMillis	RES	1
 
 .delay code
 delayMillis
+    banksel	userMillis	 
     movwf	userMillis	;user defined number of milliseconds
 startDly
     banksel	TMR0
@@ -27,6 +25,7 @@ waitTmr0
     xorlw	.125		;125 * 8uS = 1mS
     btfss	STATUS, Z
     goto	waitTmr0
+    banksel	userMillis
     decfsz	userMillis, f	;reached user defined milliseconds yet?
     goto	startDly
     

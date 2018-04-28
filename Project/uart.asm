@@ -22,7 +22,7 @@
     #define BANK3  (h'180')
    
 ;***********************UART Tansmit Routine************************************
-.transmit   code		
+.uart   code		
 Transmit
 wait_trans
     banksel	PIR1
@@ -34,7 +34,6 @@ wait_trans
 				;and then automatically loaded into TSR
     retlw	0
 ;*****************UART Receive Routine******************************************    
-.receive    code
 Receive
     banksel	PIR1
 wait_receive
