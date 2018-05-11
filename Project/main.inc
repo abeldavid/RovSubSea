@@ -19,11 +19,16 @@
     global  readyThrust
     global  UartReceiveCtr
     global  userMillis
+    global  sensorCtr
+    global  sensorFlag
 	
     #define BANK0  (h'000')
     #define BANK1  (h'080')
     #define BANK2  (h'100')
     #define BANK3  (h'180')
+    #define sensorInterval  (d'250') ;=time interval in between every sensor reading
+				    ;=5 sec/(time to receive 4 packets + time in
+				    ;between receiving 4 packets)
     
     __CONFIG _CONFIG1,    _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_HS & _FCMEN_OFF & _IESO_OFF
     
@@ -45,4 +50,6 @@
     w_copy	    RES 1	;variable used for context saving (work reg)
     status_copy	    RES 1	;variable used for context saving (status reg)
     pclath_copy	    RES 1	;variable used for context saving (pclath copy)
-    tmr4counter	    RES	1	;Counter for TMR4 interrupts
+    sensorCtr	    RES	1	;Incremented on every UART receive interrupt.
+				;At 5 sec, sensors are read
+    sensorFlag	    RES	1	;1=read sensors, 0=don't read sensors

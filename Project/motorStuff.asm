@@ -50,6 +50,7 @@ processThrusterStream
     movfw	upDownSpeed
     banksel	CCPR3L
     movwf	CCPR3L
+    
     banksel	readyThrust
     bcf		readyThrust, 1	;clear readyThrustFlag
 

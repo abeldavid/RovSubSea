@@ -21,28 +21,17 @@ INTERRUPT:
     movwf	status_copy      ;save off contents of STATUS register
     movf	PCLATH,W
     movwf       pclath_copy
-    banksel	PIE1
-    bcf		PIE1, RCIE	 ;disable UART receive interrupts
-    banksel	PIE3
-    bcf		PIE3, TMR4IE	;Disable TMR4 interrupts
-	
+    ;banksel	PIE1
+    ;bcf		PIE1, RCIE	 ;disable UART receive interrupts
+    
     ;Determine source of interrupt
     btfsc	INTCON, IOCIF	 ;change on PORTB?
     goto	PORTBchange
     banksel	PIR1
     btfsc	PIR1, RCIF	 ;UART receive interrupt?
     goto	UartReceive
-    
-    banksel	PIR3
-    bcf		PIR3, TMR4IF	;Clear TMR interrupt flag
-    banksel	tmr4counter
-    incf	tmr4counter, f	;increment timer4 interrupt counter
-    movlw	.77
-    xorwf	tmr4counter, f	;77 interrupts before reading sensors
-    btfsc	STATUS, Z	;Z=0 if reached 77
-    movlw	.1		;Dummy Instruction for testing
-    
     goto	isrEnd
+
     ;determine source of PORTB interrupt
 PORTBchange
     banksel	IOCBF
@@ -62,14 +51,13 @@ LEAK
     pagesel	Transmit
     call	Transmit
     pagesel$
-    banksel	TXSTA
-    bcf		TXSTA, TX9D	;clear sensor data flag
     banksel	IOCBF
     bcf		IOCBF, 0	;clear leak flag
     banksel	IOCBP
     bcf		IOCBP, 0	;Leak has already been detected so disable IOC 
 				;for PORTB, 0 so ROV can still be controlled and
 				;surfaced
+    
     goto	isrEnd
     
 ;*********************BEGIN UART INTERRUPT**************************************
@@ -77,6 +65,14 @@ UartReceive
     pagesel	Receive
     call	Receive
     pagesel$
+    ;Handle sensor reading interval
+    banksel	sensorCtr
+    incf	sensorCtr, f	;Increment sensor counter every uart reception
+    movlw	sensorInterval
+    xorwf	sensorCtr, w	;Ready to read sensors yet?
+    btfsc	STATUS, Z
+    bsf		sensorFlag, 0
+    
     ;1)Get "state" of ROV direction signal
     ;Check if UART packet contains a valid value for "state" (1-7)
     movlw	.8		;max number for "state"=7
@@ -115,19 +111,15 @@ checkUpDownSpeed
     goto	isrEnd
 ;Get the directional "state" of ROV
 stateData
+    movfw	receiveData
+    movwf	state
     movlw	.1
     banksel	UartReceiveCtr
     movwf	UartReceiveCtr	;restart UART reception counter
-    movfw	receiveData
-    movwf	state
     goto	isrEnd
 ;***************************END UART RECEIVE INTERRUPT**************************
 ;restore pre-ISR values to registers
 isrEnd
-    banksel	PIE1
-    bsf		PIE1, RCIE	;enable UART receive interrupts
-    banksel	PIE3
-    bsf		PIE3, TMR4IE	;Enable TMR4 interrupts
     banksel	pclath_copy
     movf	pclath_copy,W
     movwf	PCLATH
@@ -135,6 +127,9 @@ isrEnd
     movwf	STATUS          ;restore pre-isr STATUS register contents
     swapf	w_copy,f
     swapf	w_copy,w        ;restore pre-isr W register contents
+    banksel	PIE1
+    bsf		PIE1, RCIE	;enable UART receive interrupts
+    
     retfie                      ;return from interrupt
 
 .main    code	
@@ -144,6 +139,7 @@ start:
     pagesel$
     
 mainLoop
+checkThrusters
     banksel	readyThrust
     btfsc	readyThrust, 1
     goto	processStream
@@ -152,8 +148,19 @@ processStream
     pagesel	processThrusterStream
     call	processThrusterStream
     pagesel$
+    ;Check to see if we need to read sensors (Do this only after processing a thruster stream)
+    btfss	sensorFlag, 0	;Ready to read?
+    goto	mainLoop	;No reloop
+    movlw	.99		;Yes, perform a dummy test
+    movwf	transData
+    pagesel	Transmit
+    call	Transmit
+    pagesel$
+    banksel	sensorCtr
+    clrf	sensorCtr	;clear counter
+    clrf	sensorFlag	;clear flag
     goto	mainLoop
-  
+    
     END                       
 
 

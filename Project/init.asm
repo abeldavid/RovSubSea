@@ -10,6 +10,8 @@
     extern  UartReceiveCtr
     extern  readyThrust
     extern  ESCinit
+    extern  sensorCtr
+    extern  sensorFlag
     
     global  peripheralInit
     
@@ -60,20 +62,6 @@ peripheralInit
     movlw	b'00000000'
     banksel	OSCCON
     movwf	OSCCON
-    
-    ;***********Configure Timer4 (used to initiate reading of sensors)**********
-    movlw	b'01111111'     ; configure Timer2:
-		; -----1--        turn Timer4 on (TMR4ON = 1)
-		; ------11        prescale = 64 (T2CKPS = 11)
-		; -1111---      ; postscaler=1:16 (TMR4 interrupt to only occur
-				; on every 16th match of PR4
-    banksel	T4CON           ; TMR4 increments every 16 us
-    movwf	T4CON
-    movlw	.254            ; PR4 = 254
-    banksel	PR4             ; PR4 match every 4.06ms (254*16us)
-    movwf	PR4             ; TMR4 interrrupt every 65ms (16*4.06ms)
-				; Read sensors every 77 interrupts 
-				; (once every 5 seconds)
     
     ;***************Configure PWM***********************************************
     movlw	b'00000111'     ; configure Timer2:
@@ -201,11 +189,12 @@ peripheralInit
     clrf	ANSELB
     clrf	ANSELD
     clrf	ANSELE
-    
-    movlw	b'00000010'
-		 ;------1-	;Enable TMR4 interrupt (TMR4IE=1)
-    banksel	PIE3
-    movwf	PIE3
+    banksel	PIE2
+    clrf	PIE2
+    banksel	sensorCtr
+    clrf	sensorCtr
+    clrf	sensorFlag
+  
     
     retlw	0
     

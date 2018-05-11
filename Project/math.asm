@@ -12,6 +12,7 @@
 ;		           [bit 0 of multiplier is control mechanism]
 testLsb
     ; 1) Test Lsb of multiplier (also lsb of product32
+    banksel product32
     btfss   product32, 0
     goto    mulShift	    ;lsb=0 so proceed to shift
 addMpcand		    ;lsb=1 so add mpcand32 to left 1/2 of product32
@@ -38,6 +39,7 @@ addMpcand		    ;lsb=1 so add mpcand32 to left 1/2 of product32
 mulShift
     ;1st byte
     bcf	    STATUS, C	    ;Clear carry
+    banksel product32
     rrf	    product32, f    ;right shift byte #0
     ;2nd byte
     bcf	    STATUS, C	    ;Clear carry
@@ -92,6 +94,7 @@ div32
 divShift
     ; left shift A and Q together (Q gets shifted into A)
     bcf		STATUS, C	;Clear carry
+    banksel	A
     rlf		A+3,f		;left shift A (byte 4)
     btfsc	A+2, 7		;msb of 3rd byte of A = 1?
     bsf		A+3, 0		;yes so shift it into 4th byte of A
@@ -157,6 +160,7 @@ divShift
     goto	divShift	;Reloop
     goto	divComplete	;Done so exit routine
 resto
+    banksel	Q
     bcf		Q, 0		;clear lsb of Q
 ;restore A (A = A + M)
     movfw	M
@@ -246,6 +250,7 @@ getTemp
     	
 						
 negativeDt
+    banksel	negFlag
     bsf		negFlag, 0		;Set negFlag to indicate a negative value for dT
     ;subtract deeT/D2 from product32 to get a negative deeT
     movfw	deeT
@@ -270,6 +275,7 @@ negativeDt
 				
     goto	doneSubtracting	;finished subtracting D2 from product32
 postiveDt
+    banksel	product32
     movfw	product32
     subwf	deeT, f		;Subtract 1st bytes
     
@@ -340,6 +346,7 @@ doneSubtracting
     movwf	Q+3
 	;loop though 32 times (32 bit division)
     movlw	.32
+    banksel	loopCount
     movwf	loopCount
     call	div32	;division result is held in Q
 	;Add/subtract Q to/from 2000 depending on status of negflag
@@ -376,6 +383,7 @@ doneSubtracting
 	;negFlag is set (due to dT being negative) so subtract Q from 2000/Temp
 ;*********CHECK TEMPSUBTRACT PosTEMP AND NEGTEMP WITH DEBUGGER**************************
 tempSubtract
+    banksel	negFlag
     clrf	negFlag		;Reset negFlag (will need this if temp is found to be negative)
 	;determine which is greater, Q or 2000
     movfw	Q+3
@@ -399,6 +407,7 @@ tempSubtract
     goto	negTemp		;Temperature will be negative
 ;Temperature will be a positive result so subtract Q from 2000/Temp
 posTemp	
+    banksel	Q
     movfw	Q
     subwf	TempC, f		;Subtract 1st bytes
 	
@@ -420,6 +429,7 @@ posTemp
 	
 ;Temperature will be a negative result so subtract 2000/Temp from Q (and set negFlag)
 negTemp
+    banksel	negFlag
     bsf		negFlag, 0	;Set negFlag to indicate a negative temperature
 	
     movfw	TempC
@@ -469,6 +479,7 @@ divBy100
     movwf	loopCount
     call	div32	;division result is held in Q 
 	;Place div result held in Q into TempC (This is Temp in Celsius)
+    banksel	Q
     movfw	Q
     movwf	TempC
 ;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
@@ -520,6 +531,7 @@ divBy100
     movwf	loopCount
     call	div32	;division result is held in Q 
 	;Is above result negative or positive?
+    banksel	negFlag
     btfsc	negFlag, 0
     goto	negC	;Yes because Celsius temp reading was negative, goto negC to handle this
 	;Positve so add 32 to LSB of Q
@@ -535,6 +547,7 @@ negC
 	;Celsius reading was negative so subtract LSB of Q from 32
 	;if LSB of Q > than 32, result will be a negative Farenheit reading
     movlw	.32
+    banksel	Q
     subwf	Q, w
     btfsc	STATUS, C	;C = 0 if neg result
     goto	posFarenheit
