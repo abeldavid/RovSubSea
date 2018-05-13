@@ -1,5 +1,5 @@
 ;Receive PWM values from topside via UART, decode packets and send PWM value to 
-;appropriate thruster ESCs
+;appropriate thruster ESCs (Main file for ROV)
 
     list	p=16f1937	;list directive to define processor
     #include	<p16f1937.inc>		; processor specific variable definitions
@@ -151,11 +151,30 @@ processStream
     ;Check to see if we need to read sensors (Do this only after processing a thruster stream)
     btfss	sensorFlag, 0	;Ready to read?
     goto	mainLoop	;No reloop
-    movlw	.99		;Yes, perform a dummy test
+    
+    pagesel	slaveReset
+    call	slaveReset
+    pagesel$
+    pagesel	getTemp
+    call	getTemp		;read temperature data
+    pagesel$
+    movlw	.3		;Send code for temperature data
     movwf	transData
     pagesel	Transmit
     call	Transmit
     pagesel$
+    movlw	.10
+    pagesel	delayMillis
+    call	delayMillis	;Delay before sending Temp data
+    pagesel$
+    banksel	TempF
+    movfw	TempF
+    movwf	transData
+    pagesel	Transmit
+    call	Transmit	;Send temperature reading
+    pagesel$
+    
+    
     banksel	sensorCtr
     clrf	sensorCtr	;clear counter
     clrf	sensorFlag	;clear flag

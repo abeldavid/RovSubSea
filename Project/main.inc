@@ -9,6 +9,9 @@
     extern  processThrusterStream
     extern  ESCinit
     extern  peripheralInit
+    extern  getTemp	    ;routine to read temp data
+    extern  TempF	    ;Holds temp value in Farenheit
+    extern  slaveReset
     
     global  forwardSpeed
     global  reverseSpeed
@@ -21,6 +24,9 @@
     global  userMillis
     global  sensorCtr
     global  sensorFlag
+    global  fwdSpool
+    global  revSpool
+    global  upDnSpool
 	
     #define BANK0  (h'000')
     #define BANK1  (h'080')
@@ -40,6 +46,9 @@
     forwardSpeed    RES	1	;value to be placed in CCPR1L
     reverseSpeed    RES	1	;value to be placed in CCPR2L
     upDownSpeed	    RES	1	;value to be placed in CCPR3L
+    fwdSpool	    RES	1	;used for spooling up fwd spinning thrusters
+    revSpool	    RES	1	;used for spooling up rev spinning thrusters
+    upDnSpool	    RES	1	;used for spooling up T5/T6 (up/down movement)
     
     ;General Variables
     GENVAR	    UDATA

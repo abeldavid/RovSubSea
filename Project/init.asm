@@ -12,6 +12,7 @@
     extern  ESCinit
     extern  sensorCtr
     extern  sensorFlag
+    extern  slaveReset
     
     global  peripheralInit
     
@@ -167,6 +168,10 @@ peripheralInit
     ;initialize ESC:
     pagesel	ESCinit
     call	ESCinit
+    pagesel$
+    ;initialize MS5837 Temp/Press module
+    pagesel	slaveReset
+    call	slaveReset
     pagesel$
     
     ;*******************Enable interrupts***************************************

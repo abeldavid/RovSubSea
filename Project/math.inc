@@ -4,6 +4,8 @@
     errorlevel -207    ;no label after column one warning
     
     global  mul32
+    global  getTemp
+    global  TempF
     
     extern  TEMPSENS
     extern  Tref

@@ -38,7 +38,7 @@ processThrusterStream
     call	stateLookUp
     banksel	PORTD
     movwf	PORTD	    ;place AND value in PORTD
-    
+   
     movfw	forwardSpeed
     banksel	CCPR1L
     movwf	CCPR1L
