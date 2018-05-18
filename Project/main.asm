@@ -137,6 +137,11 @@ start:
     pagesel	peripheralInit
     call	peripheralInit	    ;initialize peripherals
     pagesel$
+    movlw	.2
+    movwf	transData
+    pagesel	Transmit
+    call	Transmit	    ;Let control Box know that everything is
+    pagesel$			    ;initialized
     
 mainLoop
 checkThrusters
@@ -152,9 +157,9 @@ processStream
     btfss	sensorFlag, 0	;Ready to read?
     goto	mainLoop	;No reloop
     
-    pagesel	slaveReset
-    call	slaveReset
-    pagesel$
+    ;pagesel	slaveReset
+    ;call	slaveReset
+    ;pagesel$
     pagesel	getTemp
     call	getTemp		;read temperature data
     pagesel$

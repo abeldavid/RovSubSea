@@ -94,13 +94,7 @@ beginInit
     xorwf	initCounter, w
     btfss	STATUS, Z
     goto	beginInit
-    banksel	PORTD
-    clrf	PORTD
-    movlw	.2
-    movwf	transData
-    pagesel	Transmit
-    call	Transmit
-    pagesel$
+    
     retlw	0
 
     END
