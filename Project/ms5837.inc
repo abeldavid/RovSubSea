@@ -9,16 +9,25 @@
     ;Commands for Temp/Pressure Module
     #define convertT	     (d'72')    ;start 12 bit Temperature conversion
     #define convertP	     (d'88')    ;start 12 bit Pressure conversion
-    #define ADCread	     (d'0')	    ;Read out ADC result
-    #define deviceAddrWrite  (b'11101100')
-    #define deviceAddrRead   (b'11101101')
+    #define ADCread	     (d'0')	;Read out ADC result
+    #define deviceAddrWrite  (d'236')	;Command to perform device write
+    #define deviceAddrRead   (d'237')	;Command to perform device read
     #define deviceReset	     (d'30')
+    ;Addresses for PROM coefficients
+    #define C1	    (d'162')
+    #define C2	    (d'164')
+    #define C3	    (d'166')
+    #define C4	    (d'168')
+    #define C5	    (d'170')
+    #define C6	    (d'172')
     
     global  slaveReset
     global  TEMPSENS
     global  Tref
     global  D2
     global  D1
+    global  tOrP
+    global  sensorData
     
     extern  I2Cstart
     extern  I2CStop

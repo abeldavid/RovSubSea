@@ -11,6 +11,9 @@
     extern  Tref
     extern  D2
     extern  D1
+    extern  sensorData
+    extern  tOrP
+    extern  adcCPY
     
     ;Non-shared variables
     GENVAR1	    UDATA

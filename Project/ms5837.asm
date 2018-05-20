@@ -61,6 +61,7 @@ getData
     pagesel	I2CStop
     call	I2CStop
     pagesel$
+    
     ;read command
     pagesel	I2Cstart
     call	I2Cstart
@@ -111,7 +112,7 @@ slaveReset
     call	I2Csend	
     pagesel$
     ;Send address to be read
-    movlw	.160		    ;addr for SENS (C1)
+    movlw	C1		    ;addr for SENS (C1)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     pagesel	I2Csend
@@ -150,7 +151,7 @@ slaveReset
     call	I2Csend
     pagesel$
     ;Send address to be read
-    movlw	.162		    ;addr for OFF (C2)
+    movlw	C2		    ;addr for OFF (C2)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     pagesel	I2Csend
@@ -189,7 +190,7 @@ slaveReset
     call	I2Csend
     pagesel$
     ;Send address to be read
-    movlw	.164		    ;addr for OFF (C2)
+    movlw	C3		    ;addr for TCS (C3)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     pagesel	I2Csend
@@ -227,7 +228,7 @@ slaveReset
     call	I2Csend
     pagesel$
     ;Send address to be read
-    movlw	.166		    ;addr for OFF (C2)
+    movlw	C4		    ;addr for TCO (C4)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     pagesel	I2Csend
@@ -266,7 +267,7 @@ slaveReset
     call	I2Csend
     pagesel$
     ;Send address to be read
-    movlw	.168		    ;addr for OFF (C2)
+    movlw	C5		    ;addr for TREF (C5)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     pagesel	I2Csend
@@ -305,7 +306,7 @@ slaveReset
     call	I2Csend
     pagesel$
     ;Send address to be read
-    movlw	.170		    ;addr for OFF (C2)
+    movlw	C6		    ;addr for TEMPSENS (C6)
     banksel	i2cByteToSend
     movwf	i2cByteToSend
     pagesel	I2Csend
@@ -333,40 +334,8 @@ slaveReset
     movwf	TEMPSENS+1
     movfw	coeffCPY	    ;low bytes
     movwf	TEMPSENS
-    ;*******************Done getting PROM coefficients**************************
-    ;******************Get ADC values for temp and press************************
-    banksel	tOrP
-    clrf	tOrP
-    ;First get temperature
-    banksel	tOrP
-    bsf		tOrP, 0		    ;1=temperature ADC reading
-    pagesel	sensorData
-    call	sensorData	    ;perform temperature reading
-    pagesel$
-    ;place result of temperature ADC read into D2
-    banksel	adcCPY+2
-    movfw	adcCPY+2	    ;MSBytes
-    movwf	D2+2
-    movfw	adcCPY+1
-    movwf	D2+1
-    movfw	adcCPY
-    movwf	D2
-    banksel	tOrP
-    clrf	tOrP		    ;0=Pressure ADC reading
-    pagesel	sensorData
-    call	sensorData	    ;perform pressure reading
-    pagesel$
-    ;place result of pressure ADC read into D1
-    banksel	adcCPY+2
-    movfw	adcCPY+2	    ;MSBytes
-    movwf	D1+2
-    movfw	adcCPY+1
-    movwf	D1+1
-    movfw	adcCPY
-    movwf	D1
-   
     retlw	0
-    
+    ;*******************Done getting PROM coefficients**************************
     
     
     END

@@ -190,6 +190,37 @@ divComplete
     
 ;****************************Get Temperature Data*******************************
 getTemp
+    ;******************Get ADC values for temp and press************************
+    banksel	tOrP
+    clrf	tOrP
+    ;First get temperature
+    banksel	tOrP
+    bsf		tOrP, 0		    ;1=temperature ADC reading
+    pagesel	sensorData
+    call	sensorData	    ;perform temperature reading
+    pagesel$
+    ;place result of temperature ADC read into D2
+    banksel	adcCPY+2
+    movfw	adcCPY+2	    ;MSBytes
+    movwf	D2+2
+    movfw	adcCPY+1
+    movwf	D2+1
+    movfw	adcCPY
+    movwf	D2
+    banksel	tOrP
+    clrf	tOrP		    ;0=Pressure ADC reading
+    pagesel	sensorData
+    call	sensorData	    ;perform pressure reading
+    pagesel$
+    ;place result of pressure ADC read into D1
+    banksel	adcCPY+2
+    movfw	adcCPY+2	    ;MSBytes
+    movwf	D1+2
+    movfw	adcCPY+1
+    movwf	D1+1
+    movfw	adcCPY
+    movwf	D1
+   
     banksel	negFlag
     clrf	negFlag		;clear negative number indicator
 ;1) get value of dt (dt = D2 - Tref * 2^8)
