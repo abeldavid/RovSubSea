@@ -133,6 +133,7 @@ divShift
     rlf		Q, f		;left shift Q (byte 1)
 		
 	; A = A - M
+    banksel	negFlag
     clrf	negFlag
     movfw	M
     subwf	A, f	    ;Subtract 1st bytes
@@ -207,11 +208,11 @@ getTemp
     movwf	D2+1
     movfw	adcCPY
     movwf	D2
-    banksel	tOrP
-    clrf	tOrP		    ;0=Pressure ADC reading
-    pagesel	sensorData
-    call	sensorData	    ;perform pressure reading
-    pagesel$
+    ;banksel	tOrP
+    ;clrf	tOrP		    ;0=Pressure ADC reading
+    ;pagesel	sensorData
+    ;call	sensorData	    ;perform pressure reading
+    ;pagesel$
     ;place result of pressure ADC read into D1
     banksel	adcCPY+2
     movfw	adcCPY+2	    ;MSBytes
@@ -497,6 +498,7 @@ divBy100
     clrf	M+3
 	; Place Temp into Q (Q is initially the dividend but holds the quotient at 
 	; the end of div routine
+    banksel	TempC
     movfw	TempC	
     movwf	Q
     movfw	TempC+1
@@ -515,6 +517,7 @@ divBy100
     movwf	TempC
 ;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
 	;Convert from Celcius to Farenheit (F = (9*C/5) + 32)
+    banksel	negFaren
     clrf	negFaren	;Clear negative farenheit flag
 	;Place TempC into lower 4 bytes of product32
     movfw	TempC		;TempC is only one byte
@@ -550,13 +553,19 @@ divBy100
     clrf	M+1
     clrf	M+2
     clrf	M+3
-	; Place LSB of product32 into Q (Q is initially the dividend but holds the quotient at 
+	; Place lower 4 bytes of product32 (the result of 9*TempC) into Q (Q is initially the dividend but holds the quotient at 
 	; the end of div routine) Q is a 4 byte number
     movfw	product32	
     movwf	Q
-    clrf	Q+1
-    clrf	Q+2
-    clrf	Q+3
+    movfw	product32+1
+    movwf	Q+1
+    movfw	product32+2
+    movwf	Q+2
+    movfw	product32+3
+    movwf	Q+3
+    ;clrf	Q+1
+    ;clrf	Q+2
+    ;clrf	Q+3
 	;loop though 32 times (32 bit division)
     movlw	.32
     movwf	loopCount

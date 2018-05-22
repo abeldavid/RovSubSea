@@ -36,7 +36,12 @@
 				    ;=5 sec/(time to receive 4 packets + time in
 				    ;between receiving 4 packets)
     
-    __CONFIG _CONFIG1,    _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_OFF & _WDTE_OFF & _PWRTE_ON & _FOSC_HS & _FCMEN_OFF & _IESO_OFF
+    ; CONFIG1
+; __config 0x9C2
+ __CONFIG _CONFIG1, _FOSC_HS & _WDTE_OFF & _PWRTE_ON & _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_OFF & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
+; CONFIG2
+; __config 0xDDFF
+ __CONFIG _CONFIG2, _WRT_OFF & _VCAPEN_OFF & _PLLEN_ON & _STVREN_OFF & _BORV_LO & _LVP_OFF
     
     ;Variables accessible in all banks:
     MULTIBANK	    UDATA_SHR
