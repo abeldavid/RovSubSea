@@ -21,8 +21,6 @@ INTERRUPT:
     movwf	status_copy      ;save off contents of STATUS register
     movf	PCLATH,W
     movwf       pclath_copy
-    ;banksel	PIE1
-    ;bcf		PIE1, RCIE	 ;disable UART receive interrupts
     
     ;Determine source of interrupt
     btfsc	INTCON, IOCIF	 ;change on PORTB?
@@ -157,9 +155,6 @@ processStream
     btfss	sensorFlag, 0	;Ready to read?
     goto	mainLoop	;No reloop
     
-    ;pagesel	slaveReset
-    ;call	slaveReset
-    ;pagesel$
     pagesel	getTemp
     call	getTemp		;read temperature data
     pagesel$
@@ -168,7 +163,7 @@ processStream
     pagesel	Transmit
     call	Transmit
     pagesel$
-    movlw	.10
+    movlw	.100
     pagesel	delayMillis
     call	delayMillis	;Delay before sending Temp data
     pagesel$
@@ -178,7 +173,9 @@ processStream
     pagesel	Transmit
     call	Transmit	;Send temperature reading
     pagesel$
-    
+    movlw	.100
+    pagesel	delayMillis
+    call	delayMillis	;Delay before sending Temp data
     
     banksel	sensorCtr
     clrf	sensorCtr	;clear counter

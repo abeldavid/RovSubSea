@@ -10,6 +10,7 @@
 ;[-----upper 4 bytes------][-------lower 4 bytes----------]
 ;[---------zero-----------][------32 bit multiplier-------]
 ;		           [bit 0 of multiplier is control mechanism]
+;Final Result is held in product32 at end of mul routine
 testLsb
     ; 1) Test Lsb of multiplier (also lsb of product32
     banksel product32
@@ -87,74 +88,88 @@ mulShift
 ;**********************Divide 2 32 bit numbers**********************************
 div32
 ; At beginning of routine:
-;	A = 0
+;	remainder at end of routine = 33 bits in length
 ;	loopCount = 32
-;	M = divisor
-;	Q = dividend, but holds quotient at end of routine
+;	divisor = 32 bits in length
+;	Q = dividend (32 bits), but holds quotient at end of routine
 divShift
-    ; left shift A and Q together (Q gets shifted into A)
-    bcf		STATUS, C	;Clear carry
-    banksel	A
-    rlf		A+3,f		;left shift A (byte 4)
-    btfsc	A+2, 7		;msb of 3rd byte of A = 1?
-    bsf		A+3, 0		;yes so shift it into 4th byte of A
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		A+2,f		;left shift A (byte 3)
-    btfsc	A+1, 7		;msb of 2nd byte of A = 1?
-    bsf		A+2, 0		;yes so shift it into 3rd byte of A
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		A+1,f		;left shift A (byte 2)
-    btfsc	A, 7		;msb of 1st byte of A = 1?
-    bsf		A+1, 0		;yes so shift it into 2nd byte of A
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		A,f		;left shift A (byte 1)
-    btfsc	Q+3, 7		;msb of 4th byte of Q = 1?
-    bsf		A, 0		;yes so shift it into 1st byte of A
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		Q+3, f		;left shift Q (byte 4)
-    btfsc	Q+2, 7		;msb of 3rd byte of Q = 1?
-    bsf		Q+3, 0		;yes so shift it into 4th byte of Q
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		Q+2, f		;left shift Q (byte 3)
-    btfsc	Q+1, 7		;msb of 2nd byte of Q = 1?
-    bsf		Q+2, 0		;yes so shift it into 3rd byte of Q
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		Q+1, f		;left shift Q (byte 2)
-    btfsc	Q, 7		;msb of 1st byte of Q = 1?
-    bsf		Q+1, 0		;yes so shift it into 2nd byte of Q
-	
-    bcf		STATUS, C	;Clear carry
-    rlf		Q, f		;left shift Q (byte 1)
-		
-	; A = A - M
-    banksel	negFlag
-    clrf	negFlag
-    movfw	M
-    subwf	A, f	    ;Subtract 1st bytes
+    ;Left-shift Q and remainder together (Q is shifted into remainder)
+    bcf		STATUS, C		;Clear carry
+    banksel	remainder
+    rlf		remainder+4,f		;left shift A (byte 5)
+    btfsc	remainder+3, 7		;msb of 4th byte of A = 1?
+    bsf		remainder+4, 0		;yes so shift it into 5th byte of A
     
-    movfw	M+1
+    rlf		remainder+3,f		;left shift A (byte 4)
+    btfsc	remainder+2, 7		;msb of 3rd byte of A = 1?
+    bsf		remainder+3, 0		;yes so shift it into 4th byte of A
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		remainder+2,f		;left shift A (byte 3)
+    btfsc	remainder+1, 7		;msb of 2nd byte of A = 1?
+    bsf		remainder+2, 0		;yes so shift it into 3rd byte of A
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		remainder+1,f		;left shift A (byte 2)
+    btfsc	remainder, 7		;msb of 1st byte of A = 1?
+    bsf		remainder+1, 0		;yes so shift it into 2nd byte of A
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		remainder,f		;left shift A (byte 1)
+    btfsc	Q+4, 7			;msb of 5th byte of Q = 1?
+    bsf		remainder, 0		;yes so shift it into 1st byte of A
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		Q+4, f			;left shift Q (byte 5)
+    btfsc	Q+3, 7			;msb of 4th byte of Q = 1?
+    bsf		Q+4, 0			;yes so shift it into 5th byte of Q
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		Q+3, f			;left shift Q (byte 4)
+    btfsc	Q+2, 7			;msb of 3rd byte of Q = 1?
+    bsf		Q+3, 0			;yes so shift it into 4th byte of Q
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		Q+2, f			;left shift Q (byte 3)
+    btfsc	Q+1, 7			;msb of 2nd byte of Q = 1?
+    bsf		Q+2, 0			;yes so shift it into 3rd byte of Q
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		Q+1, f			;left shift Q (byte 2)
+    btfsc	Q, 7			;msb of 1st byte of Q = 1?
+    bsf		Q+1, 0			;yes so shift it into 2nd byte of Q
+    
+    bcf		STATUS, C		;Clear carry
+    rlf		Q, f			;left shift Q (byte 1)
+    
+    ; remainder = remainder - divisor
+    movfw	divisor
+    subwf	remainder, f	;Subtract 1st bytes
+    
+    movfw	divisor+1
     btfss	STATUS, C	;borrow from subtraction of 1st bytes?
-    incfsz	M+1, w	    ;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
-    subwf	A+1, f	    ;Subtract 2nd bytes
+    incfsz	divisor+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	remainder+1, f	;Subtract 2nd bytes
 	
-    movfw	M+2
+    movfw	divisor+2
     btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
-    incfsz	M+2, w	    ;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
-    subwf	A+2, f	    ;Subtract 3rd bytes
+    incfsz	divisor+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	remainder+2, f	;Subtract 3rd bytes
 	
-    movfw	M+3
+    movfw	divisor+3
     btfss	STATUS, C	;borrow from subtraction of 3rd bytes?
-    incfsz	M+3, w	    ;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
-    subwf	A+3, f	    ;Subtract 4th bytes
-	
+    incfsz	divisor+3, w	;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	remainder+3, f	;Subtract 4th bytes
+    
+    ;Extract lsb of remainder+4
+    movlw	b'00000001'
+    andwf	remainder+4, f
+    movlw	.1
     btfss	STATUS, C	;borrow from subtraction of 4th bytes?
-    goto	resto		;yes so restore A
+    subwf	remainder+4, f
+    ;Negative result from subtraction? (Restore if so)
+    btfss	STATUS, C	;C=neg number
+    goto	resto		;msb of A=1 so restore A
 	
     bsf		Q, 0		;no so set lsb of Q
     decfsz	loopCount, f	;Decrement loop counter
@@ -163,25 +178,31 @@ divShift
 resto
     banksel	Q
     bcf		Q, 0		;clear lsb of Q
-;restore A (A = A + M)
-    movfw	M
-    addwf	A, f		;Add 1st bytes
+;restore remainder (A = remainder + divisor)
+    movfw	divisor
+    addwf	remainder, f	;Add 1st bytes
 	
-    movfw	M+1
+    movfw	divisor+1
     btfsc	STATUS, C	;Carry from addition of 1st bytes?
-    incfsz	M+1, w		;Yes so increment 2nd byte to be added (unless incrementation resulted in a zero value)
-    addwf	A+1, f		;Add 2nd bytes
+    incfsz	divisor+1, w	;Yes so increment 2nd byte to be added (unless incrementation resulted in a zero value)
+    addwf	remainder+1, f	;Add 2nd bytes
 	
-    movfw	M+2
+    movfw	divisor+2
     btfsc	STATUS, C	;Carry from addition of 2nd bytes?
-    incfsz	M+2, w		;Yes so increment 3rd byte to be added (unless incrementation resulted in a zero value)
-    addwf	A+2, f		;Add 3rd bytes
+    incfsz	divisor+2, w	;Yes so increment 3rd byte to be added (unless incrementation resulted in a zero value)
+    addwf	remainder+2, f	;Add 3rd bytes
 	
-    movfw	M+3
+    movfw	divisor+3
     btfsc	STATUS, C	;Carry from addition of 3rd bytes?
-    incfsz	M+3, w		;Yes so increment 4th byte to be added (unless incrementation resulted in a zero value)
-    addwf	A+3, f		;Add 4th bytes
+    incfsz	divisor+3, w	;Yes so increment 4th byte to be added (unless incrementation resulted in a zero value)
+    addwf	remainder+3, f	;Add 4th bytes
+    
+    btfss	STATUS, C	;Carry from addition of 4th bytes?
+    goto	decrement	;No so proceed to decrement counter
+    movlw	.1
+    addwf	remainder+4, f	;Yes so add one to 5th byte of A
 	
+decrement
     decfsz	loopCount, f	;Decrement loop counter
     goto	divShift	;Reloop
 	
@@ -214,13 +235,13 @@ getTemp
     ;call	sensorData	    ;perform pressure reading
     ;pagesel$
     ;place result of pressure ADC read into D1
-    banksel	adcCPY+2
-    movfw	adcCPY+2	    ;MSBytes
-    movwf	D1+2
-    movfw	adcCPY+1
-    movwf	D1+1
-    movfw	adcCPY
-    movwf	D1
+    ;banksel	adcCPY+2
+    ;movfw	adcCPY+2	    ;MSBytes
+    ;movwf	D1+2
+    ;movfw	adcCPY+1
+    ;movwf	D1+1
+    ;movfw	adcCPY
+    ;movwf	D1
    
     banksel	negFlag
     clrf	negFlag		;clear negative number indicator
@@ -243,7 +264,9 @@ getTemp
     ; 3rd, multiply Tref by 256
     movlw	.32
     movwf	loopCount
+    pagesel	mul32
     call	mul32	    ;result of Tref * 256 is in lower 4 bytes of product32
+    pagesel$
     
     ; 4th, perform subtraction of product32 (3 bytes) from D2 (3 bytes and is placed in deeT)
     ;	    1st place D2 in dT
@@ -349,24 +372,28 @@ doneSubtracting
     movwf	mpcand32+1	;byte 2
     clrf	mpcand32+2	;clear out upper 2 bytes of
     clrf	mpcand32+3	;mpcand32 (TEMPSENS is a 16 bit number)
-	; Multiply dT by C6/TEMPSENS
+	; Multiply dT by C6,TEMPSENS
     movlw	.32
+    banksel	loopCount
     movwf	loopCount
-    call	mul32	    ;result of dT * TEMPSENS/C6 is in lower 4 bytes of product32
-	; Divide lower 4 bytes of product32 by 2^23 (8388608)
-	; Zero out A
-    banksel	A
-    clrf	A
-    clrf	A+1
-    clrf	A+2
-    clrf	A+3
+    pagesel	mul32
+    call	mul32	    ;result of dT * TEMPSENS/C6 is in  product32
+    pagesel$
+	; Divide product32 by 2^23 (8388608)
+	; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
 	; Place d'8388608' into divisor/M
-    clrf	M
-    clrf	M+1
+    clrf	divisor
+    clrf	divisor+1
     movlw	.128
-    movwf	M+2
-    clrf	M+3
-	; Place lower 4 bytes of product32 into Q (Q is initially the dividend but holds
+    movwf	divisor+2
+    clrf	divisor+3
+	; Place product32 into Q (Q is initially the dividend but holds
 	; the quotient at the end of div routine
     movfw	product32	
     movwf	Q
@@ -376,11 +403,16 @@ doneSubtracting
     movwf	Q+2
     movfw	product32+3
     movwf	Q+3
-	;loop though 32 times (32 bit division)
-    movlw	.32
+    movfw	product32+4
+    movwf	Q+4
+	;loop though 40 times (40 bit division)
+    
+    movlw	.40
     banksel	loopCount
     movwf	loopCount
+    pagesel	div32
     call	div32	;division result is held in Q
+    pagesel$
 	;Add/subtract Q to/from 2000 depending on status of negflag
 	; First place d'2000' into TempC
     banksel	TempC
@@ -411,6 +443,12 @@ doneSubtracting
     btfsc	STATUS, C	;Carry from addition of 3rd bytes?
     incfsz	Q+3, w		;yes so increment 4th byte to be added (unless inc results in zero)
     addwf	TempC+3, f	;Add 4th bytes
+    
+    movfw	Q+4
+    btfsc	STATUS, C	;Carry from addition of 4th bytes?
+    incfsz	Q+4, w		;yes so increment 5th byte to be added (unless inc results in zero)
+    addwf	TempC+4, f	;Add 4th bytes
+    
     goto	divBy100
 	;negFlag is set (due to dT being negative) so subtract Q from 2000/Temp
 ;*********CHECK TEMPSUBTRACT PosTEMP AND NEGTEMP WITH DEBUGGER**************************
@@ -418,14 +456,19 @@ tempSubtract
     banksel	negFlag
     clrf	negFlag		;Reset negFlag (will need this if temp is found to be negative)
 	;determine which is greater, Q or 2000
-    movfw	Q+3
-    subwf	TempC+3, w	;4th bytes
-    btfss	STATUS, C	;neg result if C=0
+    movlw	.0
+    xorwf	Q+4, f
+    btfss	STATUS, Z	;non-zero number in MSB of Q?
     goto	negTemp		;Temperature will be negative
 	
-    movfw	Q+2
-    subwf	TempC+2, w	;3rd bytes
-    btfss	STATUS, C	;neg result if C=0
+    movlw	.0
+    xorwf	Q+3, f
+    btfss	STATUS, Z	;non-zero number in 4th byte of Q?
+    goto	negTemp		;Temperature will be negative
+	
+    movlw	.0
+    xorwf	Q+2, f
+    btfss	STATUS, Z	;non-zero number in 3rd byte of Q?
     goto	negTemp		;Temperature will be negative
 	
     movfw	Q+1
@@ -447,16 +490,7 @@ posTemp
     btfss	STATUS, C	;Borrow from subtraction of 1st bytes?
     incfsz	Q+1, w		;Yes so inc 2nd byte to be subtracted (unless inc results in zero)
     subwf	TempC+1, f	;Subtract 2nd bytes
-	
-    movfw	Q+2
-    btfss	STATUS, C	;Borrow from subtraction of 2nd bytes?
-    incfsz	Q+2, w		;Yes so inc 3rd byte to be subtracted (unless inc results in zero)
-    subwf	TempC+2, f	;Subtract 3rd bytes
-	
-    movfw	Q+3
-    btfss	STATUS, C	;Borrow from subtraction of 3rd bytes?
-    incfsz	Q+3, w		;Yes so inc 4th byte to be subtracted (unless inc results in zero)
-    subwf	TempC+3, f	;Subtract 4th bytes
+    
     goto	divBy100
 	
 ;Temperature will be a negative result so subtract 2000/Temp from Q (and set negFlag)
@@ -481,22 +515,39 @@ negTemp
     btfss	STATUS, C	;Borrow from subtraction of 3rd bytes?
     incfsz	TempC+3, w	;Yes so inc 4th byte to be subtracted (unless inc results in zero)
     subwf	Q+3, f		;Subtract 4th bytes
+    
+    movfw	TempC+4
+    btfss	STATUS, C	;Borrow from subtraction of 4th bytes?
+    incfsz	TempC+4, w	;Yes so inc 5th byte to be subtracted (unless inc results in zero)
+    subwf	Q+4, f		;Subtract 5th bytes
+    ;Now Place Q back in to TempC
+    movfw	Q
+    movwf	TempC
+    movfw	Q+1
+    movwf	TempC+1
+    movfw	Q+2
+    movwf	TempC+2
+    movfw	Q+3
+    movwf	TempC+3
+    movfw	Q+4
+    movwf	TempC+4
+    
 	;Divide result by 100 to get Temperature in Celsius
 divBy100
-	; Zero out A
-    banksel	A
-    clrf	A
-    clrf	A+1
-    clrf	A+2
-    clrf	A+3
-    clrf	A+4
+	; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
 	; Place d'100' into divisor/M
     movlw	.100
-    movwf	M
-    clrf	M+1
-    clrf	M+2
-    clrf	M+3
-	; Place Temp into Q (Q is initially the dividend but holds the quotient at 
+    movwf	divisor
+    clrf	divisor+1
+    clrf	divisor+2
+    clrf	divisor+3
+	; Place TempC into Q (Q is initially the dividend but holds the quotient at 
 	; the end of div routine
     banksel	TempC
     movfw	TempC	
@@ -507,14 +558,31 @@ divBy100
     movwf	Q+2
     movfw	TempC+3
     movwf	Q+3
-	;loop though 32 times (32 bit division)
-    movlw	.32
+    movfw	TempC+4
+    movwf	Q+4
+    
+	;loop though 40 times (32 bit division)
+    movlw	.40
+    banksel	loopCount
     movwf	loopCount
+    pagesel	div32
     call	div32	;division result is held in Q 
+    pagesel$
 	;Place div result held in Q into TempC (This is Temp in Celsius)
     banksel	Q
     movfw	Q
     movwf	TempC
+    movfw	Q+1
+    movwf	TempC+1
+    movfw	Q+2
+    movwf	TempC+2
+    movfw	Q+3
+    movwf	TempC+3
+    movfw	Q+4
+    movwf	TempC+4
+    
+    
+    
 ;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
 	;Convert from Celcius to Farenheit (F = (9*C/5) + 32)
     banksel	negFaren
@@ -522,9 +590,12 @@ divBy100
 	;Place TempC into lower 4 bytes of product32
     movfw	TempC		;TempC is only one byte
     movwf	product32
-    clrf	product32+1
-    clrf	product32+2
-    clrf	product32+3
+    movfw	TempC+1
+    movwf	product32+1
+    movfw	TempC+2
+    movwf	product32+2
+    movfw	TempC+3
+    movwf	product32+3
 	;zero out upper 4 bytes of product32
     clrf	product32+4
     clrf	product32+5
@@ -537,23 +608,26 @@ divBy100
     clrf	mpcand32+2
     clrf	mpcand32+3
     movlw	.32
+    banksel	loopCount
     movwf	loopCount
+    pagesel	mul32
     call	mul32	    ;result of 9 * TempC is in lower 4 bytes of product32
+    pagesel$
 	;divide LSB of product32 (result of 9 * TempC) by 5
-	; Zero out A
-    banksel	A
-    clrf	A
-    clrf	A+1
-    clrf	A+2
-    clrf	A+3
-    clrf	A+4
-	; Place d'5' into divisor/M
+	; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
+	; Place d'5' into divisor
     movlw	.5
-    movwf	M
-    clrf	M+1
-    clrf	M+2
-    clrf	M+3
-	; Place lower 4 bytes of product32 (the result of 9*TempC) into Q (Q is initially the dividend but holds the quotient at 
+    movwf	divisor
+    clrf	divisor+1
+    clrf	divisor+2
+    clrf	divisor+3
+	; Place product32 (the result of 9*TempC) into Q (Q is initially the dividend but holds the quotient at 
 	; the end of div routine) Q is a 4 byte number
     movfw	product32	
     movwf	Q
@@ -563,13 +637,16 @@ divBy100
     movwf	Q+2
     movfw	product32+3
     movwf	Q+3
-    ;clrf	Q+1
-    ;clrf	Q+2
-    ;clrf	Q+3
-	;loop though 32 times (32 bit division)
-    movlw	.32
+    movfw	product32+4
+    movwf	Q+4
+    
+	;loop though 40 times (40 bit division)
+    movlw	.40
+    banksel	loopCount
     movwf	loopCount
+    pagesel	div32
     call	div32	;division result is held in Q 
+    pagesel$
 	;Is above result negative or positive?
     banksel	negFlag
     btfsc	negFlag, 0

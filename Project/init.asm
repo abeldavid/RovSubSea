@@ -13,6 +13,10 @@
     extern  sensorCtr
     extern  sensorFlag
     extern  slaveReset
+    extern  TempC
+    extern  TempF
+    extern  negFaren
+    extern  negFlag
     
     global  peripheralInit
     
@@ -199,6 +203,10 @@ peripheralInit
     banksel	sensorCtr
     clrf	sensorCtr
     clrf	sensorFlag
+    clrf	TempC
+    clrf	TempF
+    clrf	negFaren
+    clrf	negFlag
   
     
     retlw	0

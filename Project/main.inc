@@ -12,6 +12,7 @@
     extern  getTemp	    ;routine to read temp data
     extern  TempF	    ;Holds temp value in Farenheit
     extern  slaveReset
+    extern  TempC
     
     global  forwardSpeed
     global  reverseSpeed

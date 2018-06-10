@@ -6,6 +6,9 @@
     global  mul32
     global  getTemp
     global  TempF
+    global  TempC
+    global  negFlag
+    global  negFaren
     
     extern  TEMPSENS
     extern  Tref
@@ -14,6 +17,8 @@
     extern  sensorData
     extern  tOrP
     extern  adcCPY
+    extern  slaveReset
+    
     
     ;Non-shared variables
     GENVAR1	    UDATA
@@ -23,10 +28,10 @@
     negFlag	RES	1   ;bit 0 of this is set is operation results in neg number
     deeT	RES	4   ;32 bit signed int
     ;32 bit div variables
-    A		RES	4   ;32 number
-    M		RES	4   ;divisor
-    Q		RES	4   ;dividend/quotient
-    TempC	RES	4   ;Final value for temperature (Celsius) reading (signed value)
+    remainder	RES	5   ;33 number (Remainder for div32 routine)
+    divisor	RES	4   ;divisor
+    Q		RES	5   ;dividend/quotient
+    TempC	RES	5   ;Final value for temperature (Celsius) reading (signed value)
 			    ;LSB of TempC holds value to be displayed
     TempF	RES	1   ;Final value for temperature (Farenheit) (signed value)
     negFaren    RES	1   ;Flag used to indicate a negative temp in Farenheit

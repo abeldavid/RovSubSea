@@ -1,10 +1,54 @@
-;I2C routines
-    list	    p=16f1937	   ;list directive to define processor
-    #include        <p16f1937.inc> ;processor specific variable definitions
-    #include	    <i2c.inc>
+;Various subroutines for UART opertations and data-stream processing
     
-    .I2C code
- ;Send START condition and wait for it to complete
+    list	p=16f1937	;list directive to define processor
+    #include	<p16f1937.inc>		; processor specific variable definitions
+    #include	<i2c.inc>
+    
+    extern  forwardSpeed
+    extern  reverseSpeed
+    extern  upDownSpeed
+    extern  transData
+    extern  receiveData
+    
+    global  Transmit
+    global  Receive
+	
+    errorlevel -302	;no "register not in bank 0" warnings
+    errorlevel -312     ;no  "page or bank selection not needed" messages
+    errorlevel -207    ;no label after column one warning
+
+   
+;***********************UART Tansmit Routine************************************
+.serial   code		
+Transmit
+wait_trans
+    banksel	PIR1
+    btfss	PIR1, TXIF	;Is TX buffer full? (1=empty, 0=full)
+    goto	wait_trans	;wait until it is empty
+    movfw	transData	
+    banksel	TXREG
+    movwf	TXREG		;data to be transmitted loaded into TXREG
+				;and then automatically loaded into TSR
+    retlw	0
+;*****************UART Receive Routine******************************************    
+Receive
+    banksel	PIR1
+wait_receive
+    btfss	PIR1, RCIF	;Is RX buffer full? (1=full, 0=notfull)
+    goto	wait_receive	;wait until it is full
+    banksel	RCSTA
+    bcf		RCSTA, CREN
+    banksel	RCREG
+    movfw	RCREG		;Place data from RCREG into "receiveData"
+    movwf	receiveData
+    banksel	PIR1
+    bcf	        PIR1, RCIF	    ;clear UART receive interrupt flag
+    banksel	RCSTA
+    bsf		RCSTA, CREN
+    retlw	0
+    
+;******************************I2C Routines*************************************
+;Send START condition and wait for it to complete
 I2Cstart
     banksel	SSPCON2
     bsf		SSPCON2, SEN
@@ -155,5 +199,8 @@ threeByteReceive
     call	I2CStop
     retlw	0
 ;***********************End threeByteReceive Routine****************************
-
+   
     END
+
+
+
