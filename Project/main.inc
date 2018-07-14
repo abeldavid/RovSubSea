@@ -33,7 +33,7 @@
     #define BANK1  (h'080')
     #define BANK2  (h'100')
     #define BANK3  (h'180')
-    #define sensorInterval  (d'250') ;=time interval in between every sensor reading
+    #define sensorInterval  (d'200') ;=time interval in between every sensor reading
 				    ;=5 sec/(time to receive 4 packets + time in
 				    ;between receiving 4 packets)
     

@@ -140,7 +140,31 @@ start:
     pagesel	Transmit
     call	Transmit	    ;Let control Box know that everything is
     pagesel$			    ;initialized
-    
+    ;TESTING
+;testTemp
+    ;pagesel	getTemp
+    ;call	getTemp		;read temperature data
+    ;pagesel$
+    ;movlw	.3		;Send code for temperature data
+    ;movwf	transData
+    ;pagesel	Transmit
+    ;call	Transmit
+    ;pagesel$
+    ;movlw	.10
+    ;pagesel	delayMillis
+    ;call	delayMillis	;Delay before sending Temp data
+    ;pagesel$
+    ;banksel	TempF
+    ;movfw	TempF
+    ;movwf	transData
+    ;pagesel	Transmit
+    ;call	Transmit	;Send temperature reading
+    ;pagesel$
+    ;movlw	.255
+    ;pagesel	delayMillis
+    ;call	delayMillis
+    ;goto	testTemp
+    ;END TESTING
 mainLoop
 checkThrusters
     banksel	readyThrust
@@ -151,6 +175,9 @@ processStream
     pagesel	processThrusterStream
     call	processThrusterStream
     pagesel$
+    ;TESTING
+    ;goto	mainLoop
+    ;END TESTING
     ;Check to see if we need to read sensors (Do this only after processing a thruster stream)
     btfss	sensorFlag, 0	;Ready to read?
     goto	mainLoop	;No reloop
@@ -163,7 +190,7 @@ processStream
     pagesel	Transmit
     call	Transmit
     pagesel$
-    movlw	.100
+    movlw	.10
     pagesel	delayMillis
     call	delayMillis	;Delay before sending Temp data
     pagesel$
@@ -175,7 +202,7 @@ processStream
     pagesel$
     movlw	.100
     pagesel	delayMillis
-    call	delayMillis	;Delay before sending Temp data
+    call	delayMillis	
     
     banksel	sensorCtr
     clrf	sensorCtr	;clear counter

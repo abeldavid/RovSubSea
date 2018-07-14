@@ -335,7 +335,7 @@ slaveReset
     movfw	coeffCPY	    ;low bytes
     movwf	TEMPSENS
     retlw	0
-    ;*******************Done getting PROM coefficients**************************
+    ;***********Done getting PROM coefficients (End slaveReset)*****************
     
     
     END

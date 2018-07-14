@@ -286,25 +286,30 @@ getTemp
     ;movwf	deeT+1
     ;movlw	.76
     ;movwf	deeT+2
-    ;check to see which # is greater, D2/deeT or product32, (neither is larger than a 3 byte number
-    ;so test the MSB 1st)
-    movfw	product32+2	;Check 3rd bytes
-    subwf	deeT+2, w
-    btfss	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
-    goto	negativeDt	;Yes so obtain a negative dT value
-	
-    movfw	product32+1	;Check 2nd bytes
-    subwf	deeT+1, w
-    btfss	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
-    goto	negativeDt	;Yes so obtain a negative dT value
-	
-    movfw	product32	;Check 1st bytes
-    subwf	deeT, w
-    btfsc	STATUS, C	;Carry from subtraction? (C=0 if result was negative)
-    goto	postiveDt	;No so dT will be positive. (Proceed to subtract product32 from D2/deeT)
+    ;check to see which # is greater, D2/deeT or product32, (neither is larger than a 4 byte number)
+    ;Subtract product32 from D2:
+    movfw	product32
+    subwf	deeT, f		;Subtract 1st bytes
+    
+    movfw	product32+1
+    btfss	STATUS, C	;borrow from subtraction of 1st bytes?
+    incfsz	deeT+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	deeT+1, f	;Subtract 2nd bytes
+    
+    movfw	product32+2
+    btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
+    incfsz	deeT+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	deeT+2, f	;Subtract 3rd bytes
     	
+    movfw	product32+3
+    btfss	STATUS, C	;borrow from subtraction of 3rd bytes?
+    incfsz	deeT+3, w	;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    subwf	deeT+3, f	;Subtract 4th bytes
+    
+    btfsc	STATUS, C	;borrow from subtraction of 2nd bytes?
+    goto	postiveDt
 						
-negativeDt
+negativeDt ;(256*Tref is > D2)
     banksel	negFlag
     bsf		negFlag, 0		;Set negFlag to indicate a negative value for dT
     ;subtract deeT/D2 from product32 to get a negative deeT
@@ -329,7 +334,7 @@ negativeDt
     movwf	deeT+2
 				
     goto	doneSubtracting	;finished subtracting D2 from product32
-postiveDt
+postiveDt ;(D2 is > 256*Tref)
     banksel	product32
     movfw	product32
     subwf	deeT, f		;Subtract 1st bytes
