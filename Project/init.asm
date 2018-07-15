@@ -58,11 +58,6 @@ peripheralInit
     banksel	OPTION_REG	
     movwf	OPTION_REG
     
-    movlw	b'00100000'
-		 ;--1-----	;Enable USART receive interrupt (RCIE=1)
-    banksel	PIE1
-    movwf	PIE1
-    
     ;external crystal:
     movlw	b'00000000'
     banksel	OSCCON

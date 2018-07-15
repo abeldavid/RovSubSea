@@ -254,6 +254,10 @@ getTemp
     movwf	product32+1
     clrf	product32+2
     clrf	product32+3
+    clrf	product32+4
+    clrf	product32+5
+    clrf	product32+6
+    clrf	product32+7
     ; 2nd place 256 (2^8) into mpcand32
     banksel	mpcand32
     clrf	mpcand32
@@ -286,6 +290,7 @@ getTemp
     ;movwf	deeT+1
     ;movlw	.76
     ;movwf	deeT+2
+    
     ;check to see which # is greater, D2/deeT or product32, (neither is larger than a 4 byte number)
     ;Subtract product32 from D2:
     movfw	product32
@@ -293,23 +298,33 @@ getTemp
     
     movfw	product32+1
     btfss	STATUS, C	;borrow from subtraction of 1st bytes?
-    incfsz	deeT+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    incfsz	product32+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
     subwf	deeT+1, f	;Subtract 2nd bytes
     
     movfw	product32+2
     btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
-    incfsz	deeT+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    incfsz	product32+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
     subwf	deeT+2, f	;Subtract 3rd bytes
     	
     movfw	product32+3
     btfss	STATUS, C	;borrow from subtraction of 3rd bytes?
-    incfsz	deeT+3, w	;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
+    incfsz	product32+3, w	;yes so increment 4th byte to be subtracted (Don't subtract if zero resulted from incrementing)
     subwf	deeT+3, f	;Subtract 4th bytes
     
     btfsc	STATUS, C	;borrow from subtraction of 2nd bytes?
-    goto	postiveDt
+    goto	doneSubtracting	;(D2 is > 256*Tref)
 						
 negativeDt ;(256*Tref is > D2)
+    ;Restore original value of deeT by placing value of D2 into deeT
+    banksel	D2
+    movfw	D2
+    movwf	deeT
+    movfw	D2+1
+    movwf	deeT+1
+    movfw	D2+2
+    movwf	deeT+2
+    clrf	deeT+3
+    
     banksel	negFlag
     bsf		negFlag, 0		;Set negFlag to indicate a negative value for dT
     ;subtract deeT/D2 from product32 to get a negative deeT
@@ -334,20 +349,7 @@ negativeDt ;(256*Tref is > D2)
     movwf	deeT+2
 				
     goto	doneSubtracting	;finished subtracting D2 from product32
-postiveDt ;(D2 is > 256*Tref)
-    banksel	product32
-    movfw	product32
-    subwf	deeT, f		;Subtract 1st bytes
-    
-    movfw	product32+1
-    btfss	STATUS, C	;borrow from subtraction of 1st bytes?
-    incfsz	product32+1, w	;yes so increment 2nd byte to be subtracted (Don't subtract if zero resulted from incrementing)
-    subwf	deeT+1, f	;Subtract 2nd bytes
    
-    movfw	product32+2
-    btfss	STATUS, C	;borrow from subtraction of 2nd bytes?
-    incfsz	product32+2, w	;yes so increment 3rd byte to be subtracted (Don't subtract if zero resulted from incrementing)
-    subwf	deeT+2, f	;Subtract 3rd bytes. No more bytes left in D2 (its a 24 bit number)
 doneSubtracting
     ;We now have a signed value for dT (if negFlag, 0 = 1 then negative)
     ;Multiply this by C6/2^23 and add/subtract it to/from 2000
@@ -410,7 +412,7 @@ doneSubtracting
     movwf	Q+3
     movfw	product32+4
     movwf	Q+4
-	;loop though 40 times (40 bit division)
+	;loop though 33 times (40 bit division)
     
     movlw	.40
     banksel	loopCount
@@ -418,8 +420,8 @@ doneSubtracting
     pagesel	div32
     call	div32	;division result is held in Q
     pagesel$
-	;Add/subtract Q to/from 2000 depending on status of negflag
-	; First place d'2000' into TempC
+	;Add/subtract Q to/from 2000 depending on status of negflag (sign of deeT)
+	; First place d'2000' into TempC (5 byte number)
     banksel	TempC
     movlw	.208
     movwf	TempC
@@ -427,6 +429,7 @@ doneSubtracting
     movwf	TempC+1
     clrf	TempC+2
     clrf	TempC+3
+    clrf	TempC+4
 	;check negflag to see if we need to add or subtract Q from 2000/Temp
     btfsc	negFlag, 0
     goto	tempSubtract	;negFlag is set so subtract Q from 2000/Temp
@@ -589,7 +592,7 @@ divBy100
     
     
 ;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
-	;Convert from Celcius to Farenheit (F = (9*C/5) + 32)
+	;Convert from Celcius to Farenheit (F = (9*degreeC/5) + 32)
     banksel	negFaren
     clrf	negFaren	;Clear negative farenheit flag
 	;Place TempC into lower 4 bytes of product32
@@ -615,10 +618,10 @@ divBy100
     movlw	.32
     banksel	loopCount
     movwf	loopCount
-    pagesel	mul32
+    pagesel	mul32	    ;Multiply (9*TempC)
     call	mul32	    ;result of 9 * TempC is in lower 4 bytes of product32
     pagesel$
-	;divide LSB of product32 (result of 9 * TempC) by 5
+	;divide product32 (result of 9 * TempC) by 5
 	; Zero out remainder
     banksel	remainder
     clrf	remainder

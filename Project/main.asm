@@ -135,6 +135,10 @@ start:
     pagesel	peripheralInit
     call	peripheralInit	    ;initialize peripherals
     pagesel$
+    movlw	b'00100000'
+		 ;--1-----	;Enable USART receive interrupt (RCIE=1)
+    banksel	PIE1
+    movwf	PIE1
     movlw	.2
     movwf	transData
     pagesel	Transmit
@@ -182,6 +186,8 @@ processStream
     btfss	sensorFlag, 0	;Ready to read?
     goto	mainLoop	;No reloop
     
+    banksel	PIE1
+    bcf		PIE1, RCIE	;Disable UART receive interrupts
     pagesel	getTemp
     call	getTemp		;read temperature data
     pagesel$
@@ -200,13 +206,16 @@ processStream
     pagesel	Transmit
     call	Transmit	;Send temperature reading
     pagesel$
-    movlw	.100
+    movlw	.50
     pagesel	delayMillis
     call	delayMillis	
     
     banksel	sensorCtr
     clrf	sensorCtr	;clear counter
     clrf	sensorFlag	;clear flag
+    banksel	PIE1
+    bsf		PIE1, RCIE	;Enable UART receive interrupts
+    
     goto	mainLoop
     
     END                       
