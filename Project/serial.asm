@@ -2,16 +2,32 @@
     
     list	p=16f1937	;list directive to define processor
     #include	<p16f1937.inc>		; processor specific variable definitions
-    #include	<i2c.inc>
     
     extern  forwardSpeed
     extern  reverseSpeed
     extern  upDownSpeed
     extern  transData
     extern  receiveData
-    
+    extern  i2cByteToSend   
+    extern  coeffCPY	    
+    extern  adcCPY
+    ;UART
     global  Transmit
     global  Receive
+    ;i2c
+    global  I2Cstart
+    global  I2CStop
+    global  I2Crestart
+    global  waitMSSP
+    global  sendACK
+    global  sendNACK
+    global  enReceive
+    global  I2CFail
+    global  sendI2Cbyte
+    global  I2Csend
+    global  twoByteReceive
+    global  twoByteReceive
+    global  threeByteReceive
 	
     errorlevel -302	;no "register not in bank 0" warnings
     errorlevel -312     ;no  "page or bank selection not needed" messages

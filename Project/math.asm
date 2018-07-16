@@ -662,6 +662,7 @@ divBy100
 	;Positve so add 32 to LSB of Q
 	;CONVERT POSITIVE CELSIUS TO POSITIVE FARENHEIT
     movlw	.32
+    banksel	Q
     addwf	Q, f	;Result of Farenheit conversion is now in LSB of Q
     movfw	Q
     movwf	TempF	;Positive Clesius reading converted to positive Farenheit and

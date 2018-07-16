@@ -209,7 +209,7 @@ processStream
     movlw	.50
     pagesel	delayMillis
     call	delayMillis	
-    
+    pagesel$
     banksel	sensorCtr
     clrf	sensorCtr	;clear counter
     clrf	sensorFlag	;clear flag

@@ -22,11 +22,6 @@
     #define C6	    (d'172')
     
     global  slaveReset
-    global  TEMPSENS
-    global  Tref
-    global  D2
-    global  D1
-    global  tOrP
     global  sensorData
     
     extern  I2Cstart
@@ -47,16 +42,16 @@
     extern  twoByteReceive
     extern  threeByteReceive
     
-    GENVAR1	UDATA
-    tOrP	RES 1	;flag used to determine whether we read temp
-			;or pressure data (0=pressure, 1=temperature)
-    SENS	RES 2	;Pressure Secnsitivity (2 bytes) from PROM
-    OFF		RES 2	;Pressure Offset (2 bytes) from PROM
-    TCS		RES 2	;Temp coeff of pressure sensitivity (2 bytes) from PROM
-    TCO		RES 2	;Temp coeff of pressure offset (2 bytes) from PROM
-    Tref	RES 2	;Reference temperature (2 bytes) from PROM
-    TEMPSENS	RES 2	;Temp coeff of temperature (2 bytes) from PROM
-    D1		RES 3	;Pressure value from ADC read of slave (3 bytes)
-    D2		RES 3	;Temperature value from ADC read of slave (3 bytes)
+    extern  tOrP
+    extern  SENS
+    extern  OFF
+    extern  TCS
+    extern  TCO
+    extern  Tref
+    extern  TEMPSENS
+    extern  D1
+    extern  D2
+    
+    
     
     
