@@ -138,7 +138,11 @@ start:
     movlw	b'00100000'
 		 ;--1-----	;Enable USART receive interrupt (RCIE=1)
     banksel	PIE1
-    movwf	PIE1
+    movwf	PIE1 
+    movlw	.10
+    pagesel	delayMillis
+    call	delayMillis
+    pagesel$
     movlw	.2
     movwf	transData
     pagesel	Transmit

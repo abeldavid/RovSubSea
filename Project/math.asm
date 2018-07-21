@@ -210,6 +210,118 @@ divComplete
     retlw	0
 ;****************************End div32 Routine**********************************
     
+    
+;*****************************Convert Celsius to Farenheit**********************
+CtoF
+    ;Convert from Celcius to Farenheit (F = (9*degreeC/5) + 32)
+    banksel	negFaren
+    clrf	negFaren	;Clear negative farenheit flag
+	;Place TempC into lower 4 bytes of product32
+    movfw	TempC		;TempC is only one byte
+    movwf	product32
+    movfw	TempC+1
+    movwf	product32+1
+    movfw	TempC+2
+    movwf	product32+2
+    movfw	TempC+3
+    movwf	product32+3
+	;zero out upper 4 bytes of product32
+    clrf	product32+4
+    clrf	product32+5
+    clrf	product32+6
+    clrf	product32+7
+	;Place d'9' into mpcand32 (4 byte number)
+    movlw	.9
+    movwf	mpcand32
+    clrf	mpcand32+1
+    clrf	mpcand32+2
+    clrf	mpcand32+3
+    movlw	.32
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	mul32	    ;Multiply (9*TempC)
+    call	mul32	    ;result of 9 * TempC is in lower 4 bytes of product32
+    pagesel$
+	;divide product32 (result of 9 * TempC) by 5
+	; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
+	; Place d'5' into divisor
+    movlw	.5
+    movwf	divisor
+    clrf	divisor+1
+    clrf	divisor+2
+    clrf	divisor+3
+	; Place product32 (the result of 9*TempC) into Q (Q is initially the dividend but holds the quotient at 
+	; the end of div routine) Q is a 4 byte number
+    movfw	product32	
+    movwf	Q
+    movfw	product32+1
+    movwf	Q+1
+    movfw	product32+2
+    movwf	Q+2
+    movfw	product32+3
+    movwf	Q+3
+    movfw	product32+4
+    movwf	Q+4
+    
+	;loop though 40 times (40 bit division)
+    movlw	.40
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	div32
+    call	div32	;division result is held in Q 
+    pagesel$
+	;Is above result negative or positive?
+    banksel	negFlag
+    btfsc	negFlag, 0
+    goto	negC	;Yes because Celsius temp reading was negative, goto negC to handle this
+	;Positve so add 32 to LSB of Q
+	;CONVERT POSITIVE CELSIUS TO POSITIVE FARENHEIT
+    movlw	.32
+    banksel	Q
+    addwf	Q, f	;Result of Farenheit conversion is now in LSB of Q
+    movfw	Q
+    movwf	TempF	;Positive Clesius reading converted to positive Farenheit and
+					;result is in TempF
+    goto	tempDone
+	;CELSIUS READING WAS NEGATIVE (WILL DEG F BE NEG OR POS?)
+negC
+	;Celsius reading was negative so subtract LSB of Q from 32
+	;if LSB of Q > than 32, result will be a negative Farenheit reading
+    movlw	.32
+    banksel	Q
+    subwf	Q, w
+    btfsc	STATUS, C	;C = 0 if neg result
+    goto	posFarenheit
+	;CONVERT NEGATIVE CELSIUS TO NEGATIVE FARENHEIT
+    bsf  	negFaren, 0	;set flag to indicate a neg farenheit reading
+    movfw	Q
+    movwf	TempF		;Place LSB of Q into TempF
+	;subtract 32 from LSB of Q (which is in TempF
+    movlw	.32
+    subwf	TempF, f	;Negative Celsius reading converted to a negative Farenheit and 
+						;result is in TempF
+    goto	tempDone
+	;CONVERT NEGATIVE CELSIUS TO POSITIVE FARENHEIT
+posFarenheit
+    clrf	negFaren  ;clear flag for negative farenheit reading
+	;Farenheit conversion will result in a positive number
+	;subtract LSB of Q from 32
+    movlw	.32
+    movwf	TempF	  ;Place 32 into TempF
+    movwf	Q		  ;Subtract Q from 32
+    subwf	TempF, f  ;Negative Celsius reading converted to positive Farenheit and
+					  ;result is in TempF
+tempDone
+    retlw	0
+;*************************End Celsius to Farenheit conversion*******************
+    
+    
 ;****************************Get Temperature Data*******************************
 getTemp
     ;******************Get ADC values for temp and press************************
@@ -590,53 +702,72 @@ divBy100
     movwf	TempC+4
     
     
+    ;Convert Clesius to Farenheit
+    pagesel	CtoF
+    call	CtoF
+    pagesel$
     
-;*****DUE TO INTEGER DIVISION AND NO ROUNDING, THIS IS +- 1 DEGree CELSIUS******
-	;Convert from Celcius to Farenheit (F = (9*degreeC/5) + 32)
-    banksel	negFaren
-    clrf	negFaren	;Clear negative farenheit flag
-	;Place TempC into lower 4 bytes of product32
-    movfw	TempC		;TempC is only one byte
+    ;Is TempC < 20 deg C? (It has already been divided by 100
+     movlw	.20
+     banksel	TempC
+     subwf	TempC, w
+     btfss	STATUS, C   ;C=0 is neg #
+     goto	SecondOrderLow	    ;Yes so perform 2nd order conversion for low temperature
+     goto	SecondOrderHigh	    ;No so perform 2nd order conversion for high temperature
+    
+	
+					  
+;*****************Perform 2nd Order Temperature Conversion**********************
+SecondOrderHigh
+     ;Square deeT
+     ;Place deeT into lower 4 bytes of product32
+    movfw	deeT		;TempC is only one byte
     movwf	product32
-    movfw	TempC+1
+    movfw	deeT+1
     movwf	product32+1
-    movfw	TempC+2
+    movfw	deeT+2
     movwf	product32+2
-    movfw	TempC+3
+    movfw	deeT+3
     movwf	product32+3
 	;zero out upper 4 bytes of product32
     clrf	product32+4
     clrf	product32+5
     clrf	product32+6
     clrf	product32+7
-	;Place d'9' into mpcand32 (4 byte number)
-    movlw	.9
+	;Place deeT into mpcand32 (4 byte number)
+    movfw	deeT
     movwf	mpcand32
-    clrf	mpcand32+1
-    clrf	mpcand32+2
-    clrf	mpcand32+3
+    movfw	deeT+1
+    movwf	mpcand32+1
+    movfw	deeT+2
+    movwf	mpcand32+2
+    movfw	deeT+3
+    movwf	mpcand32+3
     movlw	.32
     banksel	loopCount
     movwf	loopCount
-    pagesel	mul32	    ;Multiply (9*TempC)
-    call	mul32	    ;result of 9 * TempC is in lower 4 bytes of product32
+    pagesel	mul32	    ;Multiply (deeT*deeT)
+    call	mul32	    ;result of deeT^2 is in lower 4 bytes of product32
     pagesel$
-	;divide product32 (result of 9 * TempC) by 5
-	; Zero out remainder
+    ;Divide result by 2^37 by calling div32 twice (once for div by 2^18 and 
+    ;once for div by 2^19
+    
+    	; Zero out remainder
     banksel	remainder
     clrf	remainder
     clrf	remainder+1
     clrf	remainder+2
     clrf	remainder+3
     clrf	remainder+4
-	; Place d'5' into divisor
-    movlw	.5
-    movwf	divisor
+	; Place 2^18 into divisor/M (2^18=262144)
+    clrf	divisor
     clrf	divisor+1
-    clrf	divisor+2
-    clrf	divisor+3
-	; Place product32 (the result of 9*TempC) into Q (Q is initially the dividend but holds the quotient at 
-	; the end of div routine) Q is a 4 byte number
+    movlw	.4
+    movwf	divisor+2
+    
+	; place product32 into Q (Q is initially the dividend but holds the quotient at 
+	; the end of div routine
+    banksel	product32
     movfw	product32	
     movwf	Q
     movfw	product32+1
@@ -648,55 +779,203 @@ divBy100
     movfw	product32+4
     movwf	Q+4
     
-	;loop though 40 times (40 bit division)
+	;loop though 40 times (32 bit division)
     movlw	.40
     banksel	loopCount
     movwf	loopCount
     pagesel	div32
     call	div32	;division result is held in Q 
+    ;Now redivide previous result (held in Q) again by 2^19 (2^19=524288)
+    ; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
+	; Place 2^19 into divisor/M	
+    clrf	divisor
+    clrf	divisor+1
+    movlw	.8
+    movwf	divisor+2
+    
+    ;Q already has the number it is supposed to
+    
+	;loop though 40 times (32 bit division)
+    movlw	.40
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	div32
+    call	div32	;division result is held in Q 
+    
+    ;Multiply results by 2
+    ;Place Q (result of deeT^2/2^37) into lower 4 bytes of product32
+    movfw	Q		;TempC is only one byte
+    movwf	product32
+    movfw	Q+1
+    movwf	product32+1
+    movfw	Q+2
+    movwf	product32+2
+    movfw	Q+3
+    movwf	product32+3
+	;zero out upper 4 bytes of product32
+    clrf	product32+4
+    clrf	product32+5
+    clrf	product32+6
+    clrf	product32+7
+	;Place d.2 into mpcand32 (4 byte number)
+    movlw	.2
+    movwf	mpcand32
+    clrf	mpcand32+1
+    clrf	mpcand32+2
+    clrf	mpcand32+3
+    movlw	.32
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	mul32	    ;Multiply 
+    call	mul32	    ;result of 3*(dt^2)/2^33 is in product32
     pagesel$
-	;Is above result negative or positive?
-    banksel	negFlag
-    btfsc	negFlag, 0
-    goto	negC	;Yes because Celsius temp reading was negative, goto negC to handle this
-	;Positve so add 32 to LSB of Q
-	;CONVERT POSITIVE CELSIUS TO POSITIVE FARENHEIT
+    ;Now subtract this result from original value of tempC
+    banksel	product32
+    movfw	product32
+    subwf	TempC, f
+    ;Convert to Farenheit
+    pagesel	CtoF
+    call	CtoF
+    pagesel$
+     
+     goto	TemperatureComplete	  
+     
+     
+     ;TempC < 20 deg C
+SecondOrderLow
+     ;Square deeT
+     ;Place deeT into lower 4 bytes of product32
+    movfw	deeT		;TempC is only one byte
+    movwf	product32
+    movfw	deeT+1
+    movwf	product32+1
+    movfw	deeT+2
+    movwf	product32+2
+    movfw	deeT+3
+    movwf	product32+3
+	;zero out upper 4 bytes of product32
+    clrf	product32+4
+    clrf	product32+5
+    clrf	product32+6
+    clrf	product32+7
+	;Place deeT into mpcand32 (4 byte number)
+    movfw	deeT
+    movwf	mpcand32
+    movfw	deeT+1
+    movwf	mpcand32+1
+    movfw	deeT+2
+    movwf	mpcand32+2
+    movfw	deeT+3
+    movwf	mpcand32+3
     movlw	.32
-    banksel	Q
-    addwf	Q, f	;Result of Farenheit conversion is now in LSB of Q
-    movfw	Q
-    movwf	TempF	;Positive Clesius reading converted to positive Farenheit and
-					;result is in TempF
-    goto	tempDone
-	;CELSIUS READING WAS NEGATIVE (WILL DEG F BE NEG OR POS?)
-negC
-	;Celsius reading was negative so subtract LSB of Q from 32
-	;if LSB of Q > than 32, result will be a negative Farenheit reading
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	mul32	    ;Multiply (deeT*deeT)
+    call	mul32	    ;result of deeT^2 is in lower 4 bytes of product32
+    pagesel$
+    ;Divide result by 2^33 by calling div32 twice (once for div by 2^16 and 
+    ;once for div by 2^17
+    
+    	; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
+	; Place 2^17 into divisor/M (2^17=131072)
+    clrf	divisor
+    clrf	divisor+1
+    movlw	.2
+    movwf	divisor+2
+    
+	; place product32 into Q (Q is initially the dividend but holds the quotient at 
+	; the end of div routine
+    banksel	product32
+    movfw	product32	
+    movwf	Q
+    movfw	product32+1
+    movwf	Q+1
+    movfw	product32+2
+    movwf	Q+2
+    movfw	product32+3
+    movwf	Q+3
+    movfw	product32+4
+    movwf	Q+4
+    
+	;loop though 40 times (32 bit division)
+    movlw	.40
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	div32
+    call	div32	;division result is held in Q 
+    
+    ;Now redivide previous result (held in Q) again by 2^16 (2^16=65536)
+    ; Zero out remainder
+    banksel	remainder
+    clrf	remainder
+    clrf	remainder+1
+    clrf	remainder+2
+    clrf	remainder+3
+    clrf	remainder+4
+	; Place 2^16 into divisor/M	
+    clrf	divisor
+    clrf	divisor+1
+    movlw	.1
+    movwf	divisor+2
+    
+    ;Q already has the number it is supposed to
+    
+	;loop though 40 times (32 bit division)
+    movlw	.40
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	div32
+    call	div32	;division result is held in Q 
+    
+    ;Multiply results by 3
+    ;Place Q (result of deeT^2/2^33) into lower 4 bytes of product32
+    movfw	Q		;TempC is only one byte
+    movwf	product32
+    movfw	Q+1
+    movwf	product32+1
+    movfw	Q+2
+    movwf	product32+2
+    movfw	Q+3
+    movwf	product32+3
+	;zero out upper 4 bytes of product32
+    clrf	product32+4
+    clrf	product32+5
+    clrf	product32+6
+    clrf	product32+7
+	;Place d.3 into mpcand32 (4 byte number)
+    movlw	.3
+    movwf	mpcand32
+    clrf	mpcand32+1
+    clrf	mpcand32+2
+    clrf	mpcand32+3
     movlw	.32
-    banksel	Q
-    subwf	Q, w
-    btfsc	STATUS, C	;C = 0 if neg result
-    goto	posFarenheit
-	;CONVERT NEGATIVE CELSIUS TO NEGATIVE FARENHEIT
-    bsf  	negFaren, 0	;set flag to indicate a neg farenheit reading
-    movfw	Q
-    movwf	TempF		;Place LSB of Q into TempF
-	;subtract 32 from LSB of Q (which is in TempF
-    movlw	.32
-    subwf	TempF, f	;Negative Celsius reading converted to a negative Farenheit and 
-						;result is in TempF
-    goto	tempDone
-	;CONVERT NEGATIVE CELSIUS TO POSITIVE FARENHEIT
-posFarenheit
-    clrf	negFaren  ;clear flag for negative farenheit reading
-	;Farenheit conversion will result in a positive number
-	;subtract LSB of Q from 32
-    movlw	.32
-    movwf	TempF	  ;Place 32 into TempF
-    movwf	Q		  ;Subtract Q from 32
-    subwf	TempF, f  ;Negative Celsius reading converted to positive Farenheit and
-					  ;result is in TempF
-tempDone
+    banksel	loopCount
+    movwf	loopCount
+    pagesel	mul32	    ;Multiply 
+    call	mul32	    ;result of 3*(dt^2)/2^33 is in product32
+    pagesel$
+    ;Now subtract this result from original value of tempC
+    banksel	product32
+    movfw	product32
+    subwf	TempC, f
+    ;Convert to Farenheit
+    pagesel	CtoF
+    call	CtoF
+    pagesel$
+TemperatureComplete
+     
     retlw	0
     
     
